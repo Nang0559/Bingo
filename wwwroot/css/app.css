@@ -1,4 +1,4 @@
-﻿.valid.modified:not([type=checkbox]) {
+.valid.modified:not([type=checkbox]) {
     outline: 1px solid #26b050;
 }
 
@@ -99,8 +99,8 @@ code {
     background-color: #e6e6ff;
     position: relative; /* QUAN TRỌNG: Neo cho Flying Anchor */
     /* 💥 BỔ SUNG: THIẾT LẬP HÌNH NỀN 💥 */
-   /* background-image: url('/images/logo.jpg');*/
-    background: linear-gradient(rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.7)), url('/images/logo.jpg');
+   /* background-image: url('../images/logo.jpg');*/
+    background: linear-gradient(rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.7)), url('../images/logo.jpg');
     /* Cấu hình kích thước và vị trí cho CẢ HAI lớp (ảnh và gradient) */
     background-size: cover;
     background-repeat: no-repeat;
@@ -308,7 +308,7 @@ code {
     /* 💥 SỬA ĐỔI: DÙNG LỚP PHỦ MÀU BÁN TRONG SUỐT CHO NỀN MỜ 💥 */
     /* Lớp 1 (Overlay): Màu trắng (255, 255, 255) với độ trong suốt 80% (0.8) */
     /* Lớp 2 (Background Image): Ảnh logo.jpg của bạn */
-    background: linear-gradient(rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.8)), url('/images/logo.jpg'); /* Đảm bảo đường dẫn đúng */
+    background: linear-gradient(rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.8)), url('../images/logo.jpg'); /* Đảm bảo đường dẫn đúng */
 
     background-size: cover;
     background-repeat: no-repeat;
@@ -571,4 +571,154 @@ code {
         opacity: 1;
         transform: translateY(0);
     }
+}
+
+/*====================================================================*/
+/* THANH ĐIỀU KHIỂN VÁN CHƠI (Quay ngẫu nhiên / Ván mới)             */
+/*====================================================================*/
+.game-toolbar {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.85);
+    padding: 6px 10px;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.game-counter {
+    font-weight: 700;
+    margin-right: 4px;
+}
+
+.spinning-area .selected-numbers-container {
+    padding-top: 70px;
+}
+
+.game-title {
+    font-weight: 800;
+    color: #cc0000;
+    margin-right: 6px;
+}
+
+.game-toolbar {
+    flex-wrap: wrap;
+    max-width: 95%;
+}
+
+.popup-reward-name {
+    font-weight: 800;
+    margin: 6px 0 0;
+}
+
+/*====================================================================*/
+/* POPUP CÀI ĐẶT                                                      */
+/*====================================================================*/
+.settings-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 10002;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.settings-modal {
+    background: #fff;
+    width: 760px;
+    max-width: 96vw;
+    max-height: 92vh;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+}
+
+.settings-header {
+    padding: 12px 16px;
+    background: #007bff;
+    color: #fff;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+    .settings-header h4 {
+        margin: 0;
+    }
+
+    .settings-header .close-btn {
+        border: none;
+        background: none;
+        font-size: 26px;
+        color: #fff;
+        line-height: 1;
+    }
+
+.settings-body {
+    padding: 16px;
+    overflow-y: auto;
+}
+
+.settings-section {
+    margin: 14px 0 8px;
+    padding-bottom: 4px;
+    border-bottom: 2px solid #e9ecef;
+    color: #007bff;
+}
+
+    .settings-section:first-of-type {
+        margin-top: 0;
+    }
+
+.settings-footer {
+    padding: 12px 16px;
+    border-top: 1px solid #dee2e6;
+    background: #f8f9fa;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.settings-bg-preview {
+    height: 140px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    padding: 6px;
+}
+
+.settings-bg-preview-label {
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.settings-reward-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 0;
+    border-bottom: 1px dashed #dee2e6;
+}
+
+.settings-reward-thumb {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background: #fafafa;
+    flex-shrink: 0;
 }

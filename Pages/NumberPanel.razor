@@ -1,6 +1,6 @@
-﻿@inject IJSRuntime JSRuntime
+@inject IJSRuntime JSRuntime
 <div class="number-panel-grid">
-    @for (int i = 1; i <= 75; i++)
+    @for (int i = 1; i <= Settings.Current.TotalNumbers; i++)
     {
         // 💥 GIẢI PHÁP: TẠO BIẾN CỤC BỘ ĐỂ BUỘC GIÁ TRỊ 💥
         var fixedNumber = i;

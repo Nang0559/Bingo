@@ -1,16 +1,40 @@
-﻿@page "/"
+@page "/"
+@implements IDisposable
 
-@* Thêm các component con đã tạo ở bước trước *@
+<SettingsPopup IsVisible="@showSettings"
+               TotalLocked="@GameStarted"
+               OnClose="() => showSettings = false" />
+
 <div class="main-container">
-   
+
     <div class="top-area">
 
-        <div class="spinning-area">
+        <div class="spinning-area"
+             style="@AppSettings.BuildBackgroundStyle(Settings.Current.BackgroundImage, Settings.Current.BackgroundOverlay)">
+            <div class="game-toolbar">
+                <span class="game-title">@Settings.Current.Title</span>
+                <span class="game-counter">Đã quay: @CurrentSelectedNumbers.Count/@TotalNumbers</span>
+                <button class="btn btn-primary btn-sm"
+                        @onclick="DrawRandom"
+                        disabled="@(FlyingBallData != null)">
+                    🎲 Quay ngẫu nhiên
+                </button>
+                <button class="btn btn-outline-danger btn-sm"
+                        @onclick="ResetGame"
+                        disabled="@(FlyingBallData != null)">
+                    ↺ Ván mới
+                </button>
+                <button class="btn btn-outline-secondary btn-sm"
+                        @onclick="() => showSettings = true"
+                        disabled="@(FlyingBallData != null)">
+                    ⚙️ Cài đặt
+                </button>
+            </div>
+
             <div id="flying-target-anchor" class="flying-anchor-point"></div>
             <SelectedNumberDisplay CurrentSelectedNumbers="CurrentSelectedNumbers" />
         </div>
 
-        @* 💥 HIỂN THỊ COMPONENT BÓNG BAY TẠM THỜI 💥 *@
         @if (FlyingBallData != null)
         {
             var flyNumber = FlyingBallData.Number;
@@ -21,16 +45,15 @@
         }
 
         <div class="history-area">
-            <HistoryAndInput DrawnNumbers="DrawnNumbers"
+            <HistoryAndInput @ref="historyPanel"
+                             DrawnNumbers="DrawnNumbers"
                              CurrentSelectedNumbers="@CurrentSelectedNumbers"
                              OnDrawComplete="HandleDrawCompletion"
-                             HistoryImages="@HistoryImages"
-                             />
+                             HistoryImages="@HistoryImages" />
         </div>
     </div>
 
     <div class="bottom-area">
-        @* 💥 CẬP NHẬT: Đổi tên EventCallback từ OnNumberSelected sang OnNumberSelectedWithCoords 💥 *@
         <NumberPanel OnNumberSelectedWithCoords="HandleNumberSelection"
                      DrawnNumbers="DrawnNumbers"
                      CurrentSelectedNumbers="CurrentSelectedNumbers" />
@@ -38,85 +61,105 @@
 </div>
 
 @code {
+    private int TotalNumbers => Settings.Current.TotalNumbers;
+    private bool GameStarted => CurrentSelectedNumbers.Count > 0 || DrawnNumbers.Count > 0;
+    private bool showSettings;
 
+    protected override void OnInitialized() => Settings.OnChange += HandleSettingsChanged;
 
+    private void HandleSettingsChanged() => InvokeAsync(StateHasChanged);
 
-    private List<int> CurrentSelectedNumbers { get; set; } = new List<int>();
-    private HashSet<int> DrawnNumbers { get; set; } = new HashSet<int>();
-    private List<string> HistoryImages { get; set; } = new List<string>();
-    private bool isPopupVisible = false;
-    // Biến trạng thái giữ dữ liệu của quả bóng đang bay
-    private BallFlyData FlyingBallData { get; set; } = null;
+    public void Dispose() => Settings.OnChange -= HandleSettingsChanged;
 
-    // 💥 2. CẬP NHẬT: HandleNumberSelection NHẬN TUPLE CÓ TỌA ĐỘ 💥
+    private List<int> CurrentSelectedNumbers { get; set; } = new();
+    private HashSet<int> DrawnNumbers { get; set; } = new();
+    private List<string> HistoryImages { get; set; } = new();
+
+    // Dữ liệu quả bóng đang bay (null = không có bóng nào đang bay)
+    private BallFlyData? FlyingBallData { get; set; }
+
+    private HistoryAndInput? historyPanel;
+
+    // Người chơi bấm vào 1 số ở bảng 75 số
     private void HandleNumberSelection(Tuple<int, float, float> data)
     {
-        var number = data.Item1;
-        var startTop = data.Item2;
-        var startLeft = data.Item3;
+        var (number, startTop, startLeft) = (data.Item1, data.Item2, data.Item3);
 
-        // 1a. Kiểm tra nếu số đã quay xong/đang chọn, không làm gì
-        if (DrawnNumbers.Contains(number) || CurrentSelectedNumbers.Contains(number))
-        {
-            return;
-        }
+        // Đang có bóng bay thì bỏ qua, tránh bấm liên tiếp làm mất số
+        if (FlyingBallData != null) return;
+        if (DrawnNumbers.Contains(number) || CurrentSelectedNumbers.Contains(number)) return;
 
-        // 1b. TẠM DỪNG việc thêm vào CurrentSelectedNumbers.
-        // Thay vào đó, chúng ta kích hoạt hiệu ứng bay.
         FlyingBallData = new BallFlyData
         {
             Number = number,
             StartTop = startTop,
             StartLeft = startLeft
         };
-
-        // 💥 CHỈ CẦN GỌI StateHasChanged() để hiển thị FlyingBall 💥
         StateHasChanged();
     }
 
-    // 💥 3. PHƯƠNG THỨC GỌI KHI BÓNG BAY XONG (từ FlyingBall.razor) 💥
+    // Quay ngẫu nhiên 1 số chưa ra
+    private async Task DrawRandom()
+    {
+        if (FlyingBallData != null) return;
+
+        var available = Enumerable.Range(1, TotalNumbers)
+            .Where(n => !CurrentSelectedNumbers.Contains(n) && !DrawnNumbers.Contains(n))
+            .ToList();
+
+        if (available.Count == 0)
+        {
+            await JSRuntime.InvokeVoidAsync("showCustomError", $"Đã quay hết {TotalNumbers} số. Hãy bắt đầu ván mới.", "Thông báo");
+            return;
+        }
+
+        var number = available[Random.Shared.Next(available.Count)];
+        var pos = await JSRuntime.InvokeAsync<PositionData?>("AnimationHelper.getClickPosition", $"ball-{number}");
+
+        HandleNumberSelection(Tuple.Create(number, pos?.top ?? 0f, pos?.left ?? 0f));
+    }
+
+    // Bóng bay xong: số chính thức xuất hiện ở vùng hiển thị
     private void OnFlyAnimationComplete(int number)
     {
-        // A. Thêm số vào danh sách hiển thị chính (Vùng 70%)
-        // Đây là nơi số thực sự xuất hiện trên màn hình 70%
         if (!CurrentSelectedNumbers.Contains(number))
         {
             CurrentSelectedNumbers.Add(number);
         }
 
-        // B. Xóa dữ liệu bay để FlyingBall.razor biến mất
         FlyingBallData = null;
         StateHasChanged();
     }
 
-    // 4. Xử lý khi Popup đóng và ảnh chụp xong
+    // Sau khi trao giải + chụp ảnh xong
     private void HandleDrawCompletion(string base64Image)
     {
-        // 1. LƯU ẢNH VÀO LỊCH SỬ
         if (!string.IsNullOrEmpty(base64Image))
         {
             HistoryImages.Add(base64Image);
         }
 
-        // 2. CHUYỂN SỐ ĐANG CHỌN SANG TRẠNG THÁI ĐÃ QUAY (Drawn)
-        // Các số này sẽ tiếp tục hiển thị ở khung 70% (SelectedNumberDisplay)
-        // và bị tô màu xám/disabled ở khung 20% (NumberPanel)
         foreach (var num in CurrentSelectedNumbers)
         {
             DrawnNumbers.Add(num);
         }
 
-        // 3. KHÔNG CẦN CurrentSelectedNumbers.Clear() NỮA!
-        // Nếu bạn xóa nó, các số sẽ biến mất khỏi khung 70%.
-        // Giữ nguyên CurrentSelectedNumbers nếu bạn muốn nó tiếp tục hiển thị.
-        // Tùy theo logic hiển thị, bạn có thể cần tạo một List mới để tránh thay đổi trực tiếp.
+        StateHasChanged();
+    }
 
-        // GIẢI PHÁP TỐT NHẤT: GIỮ NGUYÊN CurrentSelectedNumbers
-        // và để HistoryAndInput.razor tự hiển thị ảnh lịch sử.
+    // Bắt đầu ván mới: xóa số đã quay, giải thưởng đã dùng và lịch sử ảnh
+    private async Task ResetGame()
+    {
+        if (FlyingBallData != null) return;
 
-        // Nếu bạn muốn dọn dẹp để chuẩn bị cho lượt quay mới:
-        // CurrentSelectedNumbers.Clear(); // <-- LƯU Ý: Nếu xóa, số sẽ biến mất ở khung 70%
+        var ok = await JSRuntime.InvokeAsync<bool>("confirm",
+            "Bắt đầu ván mới?\nToàn bộ số đã quay, giải thưởng đã trao và lịch sử ảnh sẽ bị xóa.");
+        if (!ok) return;
 
+        CurrentSelectedNumbers.Clear();
+        DrawnNumbers.Clear();
+        HistoryImages.Clear();
+        historyPanel?.ResetState();
         StateHasChanged();
     }
 }

@@ -1,4 +1,4 @@
-﻿// File: wwwroot/js/bingoCapture.js
+// File: wwwroot/js/bingoCapture.js
 
 window.BingoCapture = {
     /**
@@ -44,6 +44,18 @@ window.AnimationHelper = {
             };
         }
         return null;
+    },
+
+    /**
+     * Cho quả bóng clone bay tới đích (thay cho eval trong C#).
+     */
+    flyTo: function (elementId, dx, dy) {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+            el.style.transform = `translate(${dx}px, ${dy}px) scale(1.77)`;
+            el.style.opacity = '0.5';
+        }));
     }
 };
 // File: wwwroot/js/bingoCapture.js
@@ -90,7 +102,7 @@ window.ConfettiHelper = {
     _confettiInterval: null,
     _confettiInstance: null, // Giữ khai báo này để tránh lỗi tiềm ẩn
 
-    startConfetti: function () {
+    startConfetti: function (seconds) {
         // Dọn dẹp interval cũ
         if (this._confettiInterval) {
             clearInterval(this._confettiInterval);
@@ -100,7 +112,7 @@ window.ConfettiHelper = {
         this._confettiInstance = window.confetti;
 
         // Cấu hình pháo hoa
-        const duration = 15 * 1000;
+        const duration = (seconds > 0 ? seconds : 15) * 1000;
         const animationEnd = Date.now() + duration;
         let skew = 1;
 

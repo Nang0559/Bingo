@@ -1,4 +1,4 @@
-﻿@inject IJSRuntime JSRuntime
+@inject IJSRuntime JSRuntime
 @using static Bingo.Pages.HistoryAndInput
 @* Trong PopupComponent.razor *@
 
@@ -6,9 +6,11 @@
 {
     <div class="popup-overlay">
         <div class="fireworks-effect"></div>
-        <div class="popup-content" id="popup-content-to-capture">
+        <div class="popup-content" id="popup-content-to-capture"
+             style="@AppSettings.BuildBackgroundStyle(Settings.Current.BackgroundImage, 0.8)">
 
             <h2>Chúc mừng!</h2>
+            <h4 class="popup-reward-name">@RewardImage.Name</h4>
             <img src="@RewardImage.ImagePath" class="popup-reward-image" alt="Phần thưởng" />
 
             <div class="number-balls-container">
@@ -56,7 +58,7 @@
         // 💥 SỬA ĐỔI CHÍNH: Chỉ gọi startConfetti một lần duy nhất 💥
         if (IsVisible && !isConfettiStarted)
         {
-            await JSRuntime.InvokeVoidAsync("ConfettiHelper.startConfetti");
+            await JSRuntime.InvokeVoidAsync("ConfettiHelper.startConfetti", Settings.Current.ConfettiSeconds);
             isConfettiStarted = true;
         }
 

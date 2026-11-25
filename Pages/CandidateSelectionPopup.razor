@@ -1,4 +1,4 @@
-﻿@if (IsVisible)
+@if (IsVisible)
 {
     <div class="popup-overlay">
         <div class="selection-content">
@@ -38,7 +38,7 @@
                                 <td class="winning-numbers-cell fw-bold" style="white-space: nowrap;">
                                     @foreach (var number in CandidatesDisplay[i].Split(','))
                                     {
-                                        <span class="number-circle">@number.Trim()</span>
+                                        <span class="candidate-ball">@number.Trim()</span>
                                     }
                                 </td>
                             </tr>
@@ -122,7 +122,7 @@
     }
 
     /* CSS cho Bóng Tròn (Giữ nguyên) */
-    .number-circle {
+    .candidate-ball {
         display: inline-flex;
         justify-content: center;
         align-items: center;
@@ -147,8 +147,8 @@
         padding-bottom: 5px;
     }
 
-    /* Cập nhật .number-circle */
-    .number-circle {
+    /* Cập nhật .candidate-ball */
+    .candidate-ball {
         display: inline-flex;
         justify-content: center;
         align-items: center;

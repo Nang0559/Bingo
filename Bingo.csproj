@@ -5,6 +5,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
 	  <BlazorEnableCompression>false</BlazorEnableCompression>
+    <!-- Không tải icudt_*.dat (tránh lỗi 403/SRI trên host). Ngày/số dùng định dạng invariant. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
   <ItemGroup>

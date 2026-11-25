@@ -1,4 +1,4 @@
-﻿@inject IJSRuntime JSRuntime
+@implements IDisposable
 
 <div class="history-input-wrapper">
 
@@ -9,11 +9,12 @@
             <img src="@image.ImagePath"
                  @onclick="() => SelectImage(image)"
                  class="@(image.IsUsed ? "reward-image used" : (image.IsSelected ? "reward-image selected" : "reward-image"))"
-                 alt="Phần thưởng @image.Id" />
+                 title="@image.Name"
+                 alt="@image.Name" />
         }
     </div>
 
-    <h4>Nhập Dãy Số Phụ (Phân tách bằng dấu ',')</h4>
+    <h4>Nhập Dãy Số Phụ (@WinCountText, cách nhau bằng dấu ',' hoặc khoảng trắng)</h4>
 
     <div class="input-group mb-3">
         <input type="text" @bind="InputNumbers" class="form-control"
@@ -56,6 +57,12 @@
 
     <div class="history-area-content">
         <h3>Lịch sử Quay Thưởng (Ảnh Chụp)</h3>
+        @if (HistoryImages.Any())
+        {
+            <button class="btn btn-outline-primary btn-sm mb-2" @onclick="() => isSummaryPopupVisible = true">
+                📊 Xem tổng kết
+            </button>
+        }
         <div class="captured-images-list">
             @foreach (var imageBase64 in HistoryImages)
             {
@@ -83,7 +90,8 @@
                         OnCaptureComplete="HandleSingleCaptureComplete" />
 
         <SummaryPopupComponent IsVisible="@isSummaryPopupVisible"
-                               HistoryImages="@HistoryImages" />
+                               HistoryImages="@HistoryImages"
+                               OnClose="() => isSummaryPopupVisible = false" />
     </div>
 
 </div>
@@ -92,6 +100,8 @@
     /* Giữ nguyên CSS cũ của bạn */
     .reward-image-container {
         display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
         justify-content: space-around;
         margin-bottom: 20px;
     }
@@ -165,16 +175,76 @@
     private List<string> _currentFinalNumbers = new List<string>();
 
     // Reward Class & List (Giữ nguyên)
-    public class RewardImage { public int Id; public string Name; public string ImagePath = $"images/reward{new Random().Next(1, 6)}.png"; public bool IsUsed; public bool IsSelected; }
-    private List<RewardImage> RewardImages = new List<RewardImage> {
-        new RewardImage { Id=1, Name="GiaiNhat", ImagePath="images/reward1.png" },
-        new RewardImage { Id=2, Name="GiaiNhi", ImagePath="images/reward2.png" },
-        new RewardImage { Id=3, Name="GiaiBa", ImagePath="images/reward3.png" },
-        new RewardImage { Id=4, Name="GiaiTu", ImagePath="images/reward4.png" },
-        new RewardImage { Id=5, Name="GiaiKK", ImagePath="images/reward5.png" }
-    };
-    private RewardImage SelectedReward = null;
+    public class RewardImage
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public string ImagePath { get; set; } = "";
+        public bool IsUsed { get; set; }
+        public bool IsSelected { get; set; }
+    }
+
+    // Danh sách giải thưởng lấy từ Cài đặt
+    private List<RewardImage> RewardImages = new();
+
+    private string WinCountText => Settings.Current.MinWinCount == Settings.Current.MaxWinCount
+        ? $"{Settings.Current.MinWinCount} số"
+        : $"{Settings.Current.MinWinCount} đến {Settings.Current.MaxWinCount} số";
+
+    protected override void OnInitialized()
+    {
+        SyncRewards();
+        Settings.OnChange += HandleSettingsChanged;
+    }
+
+    public void Dispose() => Settings.OnChange -= HandleSettingsChanged;
+
+    private void HandleSettingsChanged()
+    {
+        SyncRewards();
+        InvokeAsync(StateHasChanged);
+    }
+
+    // Đồng bộ danh sách giải với Cài đặt, giữ nguyên trạng thái "đã dùng" của giải còn tồn tại
+    private void SyncRewards()
+    {
+        var old = RewardImages.ToDictionary(r => r.Id);
+        var list = new List<RewardImage>();
+        foreach (var rs in Settings.Current.Rewards)
+        {
+            if (old.TryGetValue(rs.Id, out var r))
+            {
+                r.Name = rs.Name;
+                r.ImagePath = rs.ImagePath;
+                list.Add(r);
+            }
+            else
+            {
+                list.Add(new RewardImage { Id = rs.Id, Name = rs.Name, ImagePath = rs.ImagePath });
+            }
+        }
+        RewardImages = list;
+        if (SelectedReward != null && !list.Contains(SelectedReward)) SelectedReward = null;
+    }
+    private RewardImage? SelectedReward = null;
     private string InputNumbers { get; set; } = "";
+
+    // Gọi từ Home khi bắt đầu ván mới
+    public void ResetState()
+    {
+        foreach (var r in RewardImages) { r.IsUsed = false; r.IsSelected = false; }
+        SelectedReward = null;
+        UsedWinningCombinations.Clear();
+        _tempSessionWinners.Clear();
+        _tempSessionWinnersDisplay.Clear();
+        _currentFinalNumbers.Clear();
+        _processingIndex = -1;
+        InputNumbers = "";
+        isPopupVisible = false;
+        isSummaryPopupVisible = false;
+        isCandidatePopupVisible = false;
+        StateHasChanged();
+    }
 
     private void SelectImage(RewardImage image)
     {
@@ -192,10 +262,12 @@
             JSRuntime.InvokeVoidAsync("showCustomError", "Vui lòng chọn giải và nhập dãy số."); return;
         }
         var parsedValidNumbers = new List<int>();
-        var inputNumberStrings = InputNumbers.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
+        var inputNumberStrings = InputNumbers
+            .Split(new[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
         foreach (var s in inputNumberStrings) { if (int.TryParse(s, out int n)) parsedValidNumbers.Add(n); }
 
-        bool hasRequiredCount = parsedValidNumbers.Count == 4 || parsedValidNumbers.Count == 5;
+        bool hasRequiredCount = parsedValidNumbers.Count >= Settings.Current.MinWinCount && parsedValidNumbers.Count <= Settings.Current.MaxWinCount;
         // b. Kiểm tra tính duy nhất (các số có khác nhau không?)
         bool isDistinct = parsedValidNumbers.Count == parsedValidNumbers.Distinct().Count(); // <<< KIỂM TRA MỚI
         bool allNumbersMatch = hasRequiredCount && parsedValidNumbers.All(n => CurrentSelectedNumbers.Contains(n));
@@ -204,7 +276,7 @@
 
         if (!isWinner)
         {
-            JSRuntime.InvokeVoidAsync("showCustomError", "Dãy số không hợp lệ hoặc không trúng thưởng."); return;
+            JSRuntime.InvokeVoidAsync("showCustomError", $"Dãy số không hợp lệ hoặc không trúng thưởng. (Cần {WinCountText}, tất cả đều đã quay.)"); return;
         }
 
         string winningKey = string.Join("-", parsedValidNumbers.OrderBy(n => n));
@@ -261,6 +333,7 @@
             UsedWinningCombinations.Add(winnerKey);
 
             string rewardName = SelectedReward.Name ?? $"Reward_{SelectedReward.Id}";
+            foreach (var c in Path.GetInvalidFileNameChars()) rewardName = rewardName.Replace(c, '_');
             string fileName = $"{rewardName}_{winnerKey}_{DateTime.Now:HHmmss}.png";
             await JSRuntime.InvokeVoidAsync("SaveFile", fileName, base64Image);
 
