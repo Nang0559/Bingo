@@ -72,7 +72,7 @@ namespace Bingo
         public async Task SyncAsync()
         {
             var s = _settings.Current;
-            int want = s.CardsIssued;
+            int want = (int)Math.Min(s.CardsIssued, MaxUniqueCards(s.TotalNumbers, s.NumbersPerCard));
 
             if (want <= 0)
             {
@@ -101,6 +101,7 @@ namespace Bingo
             var s = _settings.Current;
             _awarded.Clear();
             _set = s.CardsIssued <= 0 ? null : Generate(s.TotalNumbers, s.NumbersPerCard, s.CardsIssued);
+            if (_set != null && _set.Cards.Count == 0) _set = null;
             await PersistAsync();
             OnChange?.Invoke();
         }
@@ -181,7 +182,7 @@ namespace Bingo
 
             foreach (var card in _set.Cards)
             {
-                if (_awarded.Contains(Key(card))) { awarded++; continue; }
+                if (_awarded.Count > 0 && _awarded.Contains(Key(card))) { awarded++; continue; }
 
                 int missing = 0;
                 foreach (var n in card)
@@ -203,6 +204,10 @@ namespace Bingo
             string ball = s.BallColor;
             string ballText = AppSettings.ContrastText(ball);
             string title = WebUtility.HtmlEncode(s.Title);
+            // Nhiều số / thẻ → thu nhỏ bóng để vẫn vừa 8 thẻ trên 1 tờ A4
+            bool big = _set.NumbersPerCard <= 10;
+            string ballSize = big ? "14mm" : "11mm";
+            string ballFont = big ? "7mm" : "5.5mm";
 
             var sb = new StringBuilder();
             sb.Append("<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>")
@@ -221,8 +226,8 @@ namespace Bingo
               .Append(".code{font-size:4.5mm;font-weight:700;color:#444}")
               .Append(".who{font-size:3.4mm;color:#555;text-align:center}")
               .Append(".nums{display:flex;flex-wrap:wrap;justify-content:center;align-content:center;gap:2.5mm;flex:1;padding:2mm 0}")
-              .Append(".b{width:14mm;height:14mm;border-radius:50%;display:flex;align-items:center;justify-content:center;")
-              .Append("font-weight:800;font-size:7mm;color:").Append(ballText).Append(";background-color:").Append(ball).Append(";")
+              .Append(".b{width:").Append(ballSize).Append(";height:").Append(ballSize).Append(";border-radius:50%;display:flex;align-items:center;justify-content:center;")
+              .Append("font-weight:800;font-size:").Append(ballFont).Append(";color:").Append(ballText).Append(";background-color:").Append(ball).Append(";")
               .Append("background-image:radial-gradient(circle at 30% 30%,rgba(255,255,255,.45),rgba(255,255,255,0) 60%);")
               .Append("box-shadow:inset 0 -1mm 2mm rgba(0,0,0,.18)}")
               .Append(".ft{font-size:3mm;color:#666;text-align:center}")

@@ -82,6 +82,11 @@ namespace Bingo
             s.MaxWinCount = Math.Clamp(s.MaxWinCount, s.MinWinCount, 15);
             s.ConfettiSeconds = Math.Clamp(s.ConfettiSeconds, 1, 60);
 
+            s.BallColor = AppSettings.NormalizeColor(s.BallColor);
+            s.Participants = Math.Clamp(s.Participants, 0, CardService.MaxParticipants);
+            s.CardsPerPerson = Math.Clamp(s.CardsPerPerson, 1, 10);
+            s.NumbersPerCard = Math.Clamp(s.NumbersPerCard, 1, Math.Min(15, s.TotalNumbers));
+
             s.Rewards ??= new List<RewardSetting>();
             if (s.Rewards.Count == 0)
                 s.Rewards = AppSettings.CreateDefault().Rewards;

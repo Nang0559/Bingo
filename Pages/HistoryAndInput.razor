@@ -235,6 +235,7 @@
         foreach (var r in RewardImages) { r.IsUsed = false; r.IsSelected = false; }
         SelectedReward = null;
         UsedWinningCombinations.Clear();
+        Cards.ClearAwarded();
         _tempSessionWinners.Clear();
         _tempSessionWinnersDisplay.Clear();
         _currentFinalNumbers.Clear();
@@ -331,6 +332,7 @@
         {
             string winnerKey = _tempSessionWinners[_processingIndex];
             UsedWinningCombinations.Add(winnerKey);
+            Cards.MarkAwarded(winnerKey); // thẻ đã trao thưởng không còn tính vào thống kê
 
             string rewardName = SelectedReward.Name ?? $"Reward_{SelectedReward.Id}";
             foreach (var c in Path.GetInvalidFileNameChars()) rewardName = rewardName.Replace(c, '_');

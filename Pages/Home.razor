@@ -1,11 +1,12 @@
 @page "/"
 @implements IDisposable
+@using System.Linq
 
 <SettingsPopup IsVisible="@showSettings"
                TotalLocked="@GameStarted"
                OnClose="() => showSettings = false" />
 
-<div class="main-container">
+<div class="main-container" style="@AppSettings.BuildBallVars(Settings.Current.BallColor)">
 
     <div class="top-area">
 
@@ -29,10 +30,33 @@
                         disabled="@(FlyingBallData != null)">
                     ⚙️ Cài đặt
                 </button>
+                @if (Cards.HasCards)
+                {
+                    <button class="btn btn-outline-success btn-sm" @onclick="PrintCards">
+                        🖨️ In thẻ (@Cards.Count thẻ · @Cards.Sheets tờ A4)
+                    </button>
+                }
             </div>
 
             <div id="flying-target-anchor" class="flying-anchor-point"></div>
             <SelectedNumberDisplay CurrentSelectedNumbers="CurrentSelectedNumbers" />
+
+            @if (Cards.HasCards)
+            {
+                var st = Stats;
+                <div class="card-stats">
+                    <div class="card-stats-title">🎟️ Thẻ phát hành: <strong>@st.Total</strong>@(st.Awarded > 0 ? $" (đã trao {st.Awarded})" : "")</div>
+                    <div class="card-stats-row">
+                        <span class="cs-win" title="Đã đủ số, có thể nhận thưởng ngay">✅ Đủ số: <strong>@st.Winning</strong></span>
+                        <span class="cs-m1" title="Còn thiếu 1 số">⏳ Thiếu 1: <strong>@st.Missing1</strong></span>
+                        <span class="cs-m2" title="Còn thiếu 2 số">⌛ Thiếu 2: <strong>@st.Missing2</strong></span>
+                    </div>
+                    <div class="card-stats-note">
+                        Có thể trúng: <strong>@st.Winning</strong> / @st.Remaining thẻ chưa trao
+                        (@(st.Remaining > 0 ? (st.Winning * 100.0 / st.Remaining).ToString("0.##") : "0")%)
+                    </div>
+                </div>
+            }
         </div>
 
         @if (FlyingBallData != null)
@@ -65,11 +89,29 @@
     private bool GameStarted => CurrentSelectedNumbers.Count > 0 || DrawnNumbers.Count > 0;
     private bool showSettings;
 
-    protected override void OnInitialized() => Settings.OnChange += HandleSettingsChanged;
+    // Thống kê thẻ dựa trên TẤT CẢ số đã quay (đang chọn + đã chốt)
+    private CardStats Stats => Cards.GetStats(CurrentSelectedNumbers.Concat(DrawnNumbers));
+
+    protected override void OnInitialized()
+    {
+        Settings.OnChange += HandleSettingsChanged;
+        Cards.OnChange += HandleSettingsChanged;
+    }
 
     private void HandleSettingsChanged() => InvokeAsync(StateHasChanged);
 
-    public void Dispose() => Settings.OnChange -= HandleSettingsChanged;
+    public void Dispose()
+    {
+        Settings.OnChange -= HandleSettingsChanged;
+        Cards.OnChange -= HandleSettingsChanged;
+    }
+
+    private async Task PrintCards()
+    {
+        var html = Cards.BuildPrintHtml(Settings.Current);
+        if (string.IsNullOrEmpty(html)) return;
+        await JSRuntime.InvokeVoidAsync("SettingsHelper.printHtml", html);
+    }
 
     private List<int> CurrentSelectedNumbers { get; set; } = new();
     private HashSet<int> DrawnNumbers { get; set; } = new();

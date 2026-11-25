@@ -47,6 +47,49 @@
                     <div class="form-text mb-2">Không đổi được "Tổng số bóng" khi ván đang chơi. Hãy bấm "Ván mới" trước.</div>
                 }
 
+                @* ============ MÀU BÓNG ============ *@
+                <h5 class="settings-section">Màu bóng</h5>
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                    <input type="color" class="form-control form-control-color" title="Chọn màu bóng"
+                           value="@_draft.BallColor" @onchange="OnBallColorChanged" />
+                    @foreach (var c in BallPresets)
+                    {
+                        var color = c;
+                        <button type="button" class="ball-swatch @(_draft.BallColor == color ? "active" : "")"
+                                style="background:@color" title="@color" @onclick="() => _draft.BallColor = color"></button>
+                    }
+                    <span class="ball-preview" style="@AppSettings.BuildBallVars(_draft.BallColor)">07</span>
+                </div>
+
+                @* ============ THẺ BINGO ============ *@
+                <h5 class="settings-section">Thẻ Bingo (in 8 thẻ / tờ A4)</h5>
+                <div class="row g-2 mb-2">
+                    <div class="col-6 col-md-4">
+                        <label class="form-label">Số người tham gia</label>
+                        <input type="number" class="form-control" min="0" max="@CardService.MaxParticipants"
+                               @bind="_draft.Participants" @bind:event="oninput" />
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <label class="form-label">Thẻ / người</label>
+                        <input type="number" class="form-control" min="1" max="10"
+                               @bind="_draft.CardsPerPerson" @bind:event="oninput" />
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <label class="form-label">Số bóng / thẻ</label>
+                        <input type="number" class="form-control" min="1" max="15"
+                               @bind="_draft.NumbersPerCard" @bind:event="oninput" />
+                    </div>
+                </div>
+                <div class="form-text mb-2">
+                    Tổng thẻ phát hành: <strong>@_draft.CardsIssued</strong>
+                    · Số tờ A4: <strong>@((_draft.CardsIssued + CardService.CardsPerSheet - 1) / CardService.CardsPerSheet)</strong>.
+                    Thẻ trúng khi <strong>tất cả</strong> số trên thẻ đã được quay. Đặt số người = 0 để không dùng thẻ.
+                </div>
+                @if (TotalLocked && Cards.HasCards)
+                {
+                    <div class="form-text mb-2 text-danger">Đổi số người / thẻ / số bóng sẽ tạo lại toàn bộ thẻ (thẻ đã in không còn dùng được).</div>
+                }
+
                 @* ============ HÌNH NỀN ============ *@
                 <h5 class="settings-section">Hình nền</h5>
 
@@ -132,6 +175,12 @@
 
     [Parameter] public EventCallback OnClose { get; set; }
 
+    private static readonly string[] BallPresets =
+        { "#28a745", "#dc3545", "#0d6efd", "#fd7e14", "#6f42c1", "#e83e8c", "#20c997", "#ffc107" };
+
+    private void OnBallColorChanged(ChangeEventArgs e) =>
+        _draft!.BallColor = AppSettings.NormalizeColor(e.Value?.ToString());
+
     private AppSettings? _draft;
     private string? _error;
     private bool _wasVisible;
@@ -174,6 +223,18 @@
         if (s.MinWinCount < 1 || s.MaxWinCount > 15) return "Số trúng phải từ 1 đến 15.";
         if (s.MinWinCount > s.MaxWinCount) return "Số trúng tối thiểu không được lớn hơn tối đa.";
         if (s.MaxWinCount > s.TotalNumbers) return "Số trúng tối đa không được lớn hơn tổng số bóng.";
+        if (s.Participants < 0 || s.Participants > CardService.MaxParticipants)
+            return $"Số người tham gia phải từ 0 đến {CardService.MaxParticipants}.";
+        if (s.CardsPerPerson < 1 || s.CardsPerPerson > 10) return "Số thẻ mỗi người phải từ 1 đến 10.";
+        if (s.CardsIssued > 0)
+        {
+            if (s.NumbersPerCard < s.MinWinCount || s.NumbersPerCard > s.MaxWinCount)
+                return $"Số bóng trên thẻ ({s.NumbersPerCard}) phải nằm trong khoảng số trúng ({s.MinWinCount}–{s.MaxWinCount}).";
+            if (s.NumbersPerCard > s.TotalNumbers) return "Số bóng trên thẻ không được lớn hơn tổng số bóng.";
+            var maxCards = CardService.MaxUniqueCards(s.TotalNumbers, s.NumbersPerCard);
+            if (s.CardsIssued > maxCards)
+                return $"Chỉ tạo được tối đa {maxCards:N0} thẻ khác nhau với {s.NumbersPerCard} bóng / {s.TotalNumbers} số.";
+        }
         if (s.ConfettiSeconds < 1 || s.ConfettiSeconds > 60) return "Thời gian pháo hoa phải từ 1 đến 60 giây.";
         if (s.Rewards.Count == 0) return "Cần ít nhất 1 giải thưởng.";
         if (s.Rewards.Any(r => string.IsNullOrWhiteSpace(r.Name))) return "Mỗi giải thưởng cần có tên.";

@@ -52,6 +52,23 @@ window.SettingsHelper = {
         });
     },
 
+    // In HTML (thẻ Bingo) bằng iframe ẩn — không bị chặn popup
+    printHtml: function (html) {
+        const old = document.getElementById('bingo-print-frame');
+        if (old) old.remove();
+        const f = document.createElement('iframe');
+        f.id = 'bingo-print-frame';
+        f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+        f.onload = function () {
+            try {
+                f.contentWindow.focus();
+                f.contentWindow.print();
+            } catch (e) { window.showCustomError('Không mở được hộp thoại in: ' + e); }
+        };
+        document.body.appendChild(f);
+        f.srcdoc = html;
+    },
+
     // Đọc file văn bản (JSON nhập thiết lập)
     readText: function (inputId) {
         return new Promise(function (resolve) {

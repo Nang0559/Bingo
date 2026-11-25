@@ -69,8 +69,8 @@
         min-width: 45px;
         height: 45px;
         border-radius: 50%;
-        background-color: #28a745; /* Màu xanh lá cây mặc định */
-        color: white;
+        background-color: var(--ball-color, #28a745); /* Màu bóng theo Cài đặt */
+        color: var(--ball-text, #fff);
         font-weight: bold;
         font-size: 1.1rem;
         display: flex;
@@ -82,7 +82,7 @@
     }
 
         .number-circle:hover:not(.drawn) {
-            background-color: #218838;
+            filter: brightness(0.85);
             transform: scale(1.05);
         }
 

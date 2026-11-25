@@ -141,8 +141,8 @@ code {
     min-width: 45px;
     height: 45px;
     border-radius: 50%;
-    background-color: #28a745; /* Xanh lá */
-    color: white;
+    background-color: var(--ball-color, #28a745); /* Màu bóng theo Cài đặt */
+    color: var(--ball-text, #fff);
     font-weight: bold;
     font-size: 1.1rem;
     display: flex;
@@ -154,7 +154,7 @@ code {
 }
 
     .number-circle:hover:not(.drawn) {
-        background-color: #218838;
+        filter: brightness(0.85);
         transform: scale(1.05);
     }
 
@@ -189,8 +189,8 @@ code {
     width: 45px;
     height: 45px;
     border-radius: 50%;
-    background-color: #28a745;
-    color: white;
+    background-color: var(--ball-color, #28a745);
+    color: var(--ball-text, #fff);
     font-weight: bold;
     font-size: 1.1rem;
     display: flex;
@@ -232,8 +232,9 @@ code {
     width: 80px;
     height: 80px;
     border-radius: 50%;
-    background: radial-gradient(circle at 30% 30%, #ff6b6b, #cc0000); /* Màu Đỏ Đẹp */
-    color: white;
+    background-color: var(--ball-color, #cc0000);
+    background-image: radial-gradient(circle at 30% 30%, rgba(255,255,255,.45), rgba(255,255,255,0) 60%);
+    color: var(--ball-text, #fff);
     font-weight: 900;
     font-size: 2rem;
     display: flex;
@@ -722,3 +723,29 @@ code {
     background: #fafafa;
     flex-shrink: 0;
 }
+
+
+/* ---------- Màu bóng (Cài đặt) ---------- */
+.ball-swatch {
+    width: 28px; height: 28px; border-radius: 50%;
+    border: 2px solid #fff; box-shadow: 0 0 0 1px #999; cursor: pointer; padding: 0;
+}
+.ball-swatch.active { box-shadow: 0 0 0 3px #212529; }
+.ball-preview {
+    width: 40px; height: 40px; border-radius: 50%; margin-left: 8px;
+    display: inline-flex; align-items: center; justify-content: center; font-weight: 800;
+    background-color: var(--ball-color); color: var(--ball-text);
+    background-image: radial-gradient(circle at 30% 30%, rgba(255,255,255,.45), rgba(255,255,255,0) 60%);
+}
+
+/* ---------- Thống kê thẻ ---------- */
+.card-stats {
+    position: absolute; left: 10px; bottom: 10px; z-index: 20;
+    background: rgba(255,255,255,.92); border: 1px solid #ddd; border-radius: 8px;
+    padding: 6px 12px; font-size: .9rem; box-shadow: 0 2px 6px rgba(0,0,0,.15);
+}
+.card-stats-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.card-stats .cs-win { color: #198754; }
+.card-stats .cs-m1 { color: #b45f06; }
+.card-stats .cs-m2 { color: #6c757d; }
+.card-stats-note { color: #444; font-size: .85rem; }

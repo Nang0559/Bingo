@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json.Serialization;
 
 namespace Bingo
 {
@@ -20,6 +21,26 @@ namespace Bingo
         public int MaxWinCount { get; set; } = 5;
         public int ConfettiSeconds { get; set; } = 15;
 
+        // ----- Màu bóng -----
+        public const string DefaultBallColor = "#28a745";
+
+        /// <summary>Màu bóng dạng #rrggbb (áp dụng cho bảng số, bóng bay, bóng đã quay và thẻ in).</summary>
+        public string BallColor { get; set; } = DefaultBallColor;
+
+        // ----- Thẻ Bingo -----
+        /// <summary>Số người tham gia. 0 = không phát hành thẻ.</summary>
+        public int Participants { get; set; } = 0;
+
+        /// <summary>Số thẻ phát cho mỗi người.</summary>
+        public int CardsPerPerson { get; set; } = 1;
+
+        /// <summary>Số bóng trên mỗi thẻ (thẻ trúng khi cả dãy số này đều đã quay).</summary>
+        public int NumbersPerCard { get; set; } = 5;
+
+        /// <summary>Tổng số thẻ phát hành = người tham gia x thẻ mỗi người.</summary>
+        [JsonIgnore]
+        public int CardsIssued => Math.Max(0, Participants) * Math.Max(1, CardsPerPerson);
+
         public List<RewardSetting> Rewards { get; set; } = new();
 
         public static AppSettings CreateDefault() => new()
@@ -33,6 +54,34 @@ namespace Bingo
                 new() { Id = 5, Name = "Giải Khuyến Khích", ImagePath = "images/reward5.png" },
             }
         };
+
+        /// <summary>Chuẩn hóa về #rrggbb hợp lệ (tránh chèn chuỗi lạ vào CSS/HTML).</summary>
+        public static string NormalizeColor(string? c)
+        {
+            if (string.IsNullOrWhiteSpace(c)) return DefaultBallColor;
+            c = c.Trim();
+            if (c.Length == 4 && c[0] == '#') c = "#" + string.Concat(c.Skip(1).Select(ch => $"{ch}{ch}"));
+            bool ok = c.Length == 7 && c[0] == '#' && c.Skip(1).All(Uri.IsHexDigit);
+            return ok ? c.ToLowerInvariant() : DefaultBallColor;
+        }
+
+        /// <summary>Màu chữ (đen/trắng) dễ đọc trên nền màu <paramref name="hex"/>.</summary>
+        public static string ContrastText(string hex)
+        {
+            hex = NormalizeColor(hex);
+            int r = Convert.ToInt32(hex.Substring(1, 2), 16);
+            int g = Convert.ToInt32(hex.Substring(3, 2), 16);
+            int b = Convert.ToInt32(hex.Substring(5, 2), 16);
+            double lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0;
+            return lum > 0.6 ? "#111111" : "#ffffff";
+        }
+
+        /// <summary>Biến CSS dùng chung cho mọi quả bóng.</summary>
+        public static string BuildBallVars(string? color)
+        {
+            var c = NormalizeColor(color);
+            return $"--ball-color:{c};--ball-text:{ContrastText(c)};";
+        }
 
         /// <summary>Chuỗi CSS "background" gồm ảnh nền + lớp phủ trắng.</summary>
         public static string BuildBackgroundStyle(string? image, double overlay)
