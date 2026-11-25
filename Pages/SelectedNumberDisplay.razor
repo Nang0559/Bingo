@@ -1,0 +1,18 @@
+﻿<div class="selected-numbers-container">
+    @if (CurrentSelectedNumbers != null && CurrentSelectedNumbers.Any())
+    {
+        @foreach (var number in CurrentSelectedNumbers)
+        {
+            <div id="@($"target-ball-{number}")" 
+                 class="selected-number-ball">
+                @number.ToString("00")
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public List<int> CurrentSelectedNumbers { get; set; } = new List<int>();
+}
+

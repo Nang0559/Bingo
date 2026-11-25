@@ -1,0 +1,65 @@
+﻿@* File: SummaryPopupComponent.razor *@
+@if (IsVisible)
+{
+   @*  <div class="summary-overlay">
+        <div class="summary-content">
+            <h3>🎉 BÁO CÁO TỔNG KẾT QUAY THƯỞNG 🎉</h3>
+            <p>Tất cả ảnh thưởng đã được sử dụng. Dưới đây là danh sách tổng thể:</p>
+
+            <div class="captured-list-summary">
+                @if (HistoryImages.Any())
+                {
+                    @foreach (var imageBase64 in HistoryImages)
+                    {
+                        <img  src="@imageBase64" alt="Ảnh chụp lịch sử" class="history-snapshot-summary" />
+                    }
+                }
+                else
+                {
+                    <p>Không có ảnh chụp nào được ghi lại.</p>
+                }
+            </div>
+
+            <button class="btn btn-primary mt-3" @onclick="() => IsVisible = false">Đóng Tổng kết</button>
+        </div>
+    </div> *@
+    <div class="summary-overlay">
+        <div class="summary-content">
+            <!-- 1️⃣ Tiêu đề -->
+            <div class="summary-header">
+                <h3>🎉 BÁO CÁO TỔNG KẾT QUAY THƯỞNG 🎉</h3>
+          
+            </div>
+
+            <!-- 2️⃣ Lưới ảnh -->
+            <div class="captured-list-summary">
+                @if (HistoryImages.Any())
+                {
+                    @foreach (var imageBase64 in HistoryImages)
+                    {
+                        <div class="image-cell">
+                        <img src="@imageBase64" alt="Ảnh chụp lịch sử" class="history-snapshot-summary" />
+                        </div>
+                    }
+                }
+                else
+                {
+                    <p>Không có ảnh chụp nào được ghi lại.</p>
+                }
+            </div>
+
+            <!-- 3️⃣ Nút -->
+            <div class="summary-footer">
+                <button class="btn btn-primary" @onclick="() => IsVisible = false">Đóng Tổng kết</button>
+            </div>
+        </div>
+    </div>
+
+}
+@code {
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    [Parameter]
+    public List<string> HistoryImages { get; set; } = new List<string>();
+}

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bingo20Y</title>
+    <base href="/">
+    <link rel="stylesheet" href="css/app.css" />
+    <!-- If you add any scoped CSS files, uncomment the following to load them
+    <link href="Bingo.styles.css" rel="stylesheet" /> -->
+</head>
+
+<body>
+    <div id="app">
+        <svg class="loading-progress">
+            <circle r="40%" cx="50%" cy="50%" />
+            <circle r="40%" cx="50%" cy="50%" />
+        </svg>
+        <div class="loading-progress-text"></div>
+    </div>
+
+    <div id="blazor-error-ui">
+        An unhandled error has occurred.
+        <a href="" class="reload">Reload</a>
+        <a class="dismiss">🗙</a>
+    </div>
+    <div id="custom-alert-overlay" class="custom-alert-overlay">
+        <div id="custom-alert-box" class="custom-alert-box">
+            <div id="custom-alert-icon" class="custom-alert-icon error">!</div>
+            <h4 id="custom-alert-title">Lỗi Phát Sinh!</h4>
+            <p id="custom-alert-message"></p>
+            <button id="custom-alert-confirm" onclick="document.getElementById('custom-alert-overlay').style.display='none';">Đóng</button>
+        </div>
+    </div>
+    <script src="_framework/blazor.webassembly.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.js"></script>
+    <script src="js/bingoCapture.js"></script>
+    <script src="js/utils.js"></script>
+</body>
+
+</html>

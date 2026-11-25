@@ -1,0 +1,183 @@
+﻿@if (IsVisible)
+{
+    <div class="popup-overlay">
+        <div class="selection-content">
+            <div class="selection-header">
+                <h4>🎉 Chọn Người Trao Giải</h4>
+                <button class="close-btn" @onclick="OnCancel">×</button>
+            </div>
+
+            <div class="selection-body">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th width="60" class="text-center">Chọn</th>
+                            <th>STT</th>
+                            <th>Dãy Số Trúng</th> @* Cột này sẽ được tối ưu để chứa số ngang *@
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (int i = 0; i < CandidatesDisplay.Count; i++)
+                        {
+                            var index = i;
+                            var isSelected = SelectedIndex == index;
+
+                            <tr class="@(isSelected ? "table-primary" : "")"
+                                @onclick="() => SelectItem(index)"
+                                style="cursor: pointer;">
+                                <td class="text-center">
+                                    <input type="checkbox" checked="@isSelected"
+                                           @onchange="() => SelectItem(index)"
+                                           @onclick:stopPropagation
+                                           style="transform: scale(1.2);" />
+                                </td>
+                                <td>@(index + 1)</td>
+
+                                @* Thêm style để đảm bảo nội dung không bị ngắt dòng *@
+                                @* Thay thế bằng thẻ TD này *@
+                                <td class="winning-numbers-cell fw-bold" style="white-space: nowrap;">
+                                    @foreach (var number in CandidatesDisplay[i].Split(','))
+                                    {
+                                        <span class="number-circle">@number.Trim()</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="selection-footer">
+                <span class="text-muted small me-auto">
+                    @(SelectedIndex != -1 ? $"Đang chọn vé số {SelectedIndex + 1}" : "Vui lòng chọn 1 vé")
+                </span>
+                <button class="btn btn-secondary me-2" @onclick="OnCancel">Hủy</button>
+                <button class="btn btn-success"
+                        disabled="@(SelectedIndex == -1)"
+                        @onclick="ConfirmSelection">
+                    ✅ Trao Giải Vé Này
+                </button>
+            </div>
+        </div>
+    </div>
+}
+<style>
+    /* ---------------------------------- */
+    /* CSS CẬP NHẬT: Tăng chiều rộng Popup */
+    /* ---------------------------------- */
+    .popup-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.7);
+        z-index: 2000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .selection-content {
+        /* Tăng chiều rộng lên 750px để đảm bảo đủ chỗ cho 5 số */
+        background: white;
+        width: 750px;
+        max-width: 95%;
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 15px 40px rgba(0,0,0,0.5);
+        overflow: hidden;
+    }
+
+    .selection-header {
+        padding: 15px;
+        background: #007bff;
+        color: white;
+        border-bottom: none;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .selection-body {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+
+    .selection-footer {
+        padding: 15px;
+        border-top: 1px solid #dee2e6;
+        background: #f8f9fa;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+    }
+
+    .close-btn {
+        border: none;
+        background: none;
+        font-size: 24px;
+        color: white;
+    }
+
+    /* CSS cho Bóng Tròn (Giữ nguyên) */
+    .number-circle {
+        display: inline-flex;
+        justify-content: center;
+        align-items: center;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background-color: #ffc107;
+        color: #343a40;
+        font-weight: 700;
+        font-size: 14px;
+        margin-right: 5px;
+        border: 2px solid #e0a800;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    }
+    /* Thêm CSS cho cột chứa các số trúng giải */
+    .winning-numbers-cell {
+        display: flex; /* Quan trọng: Biến thẻ TD thành flex container */
+        flex-direction: row; /* Đảm bảo các số xếp ngang */
+        align-items: center; /* Căn giữa theo chiều dọc */
+        flex-wrap: nowrap; /* Ngăn không cho các số tự động xuống dòng (cùng với white-space: nowrap trong HTML) */
+        padding-top: 5px; /* Tăng khoảng cách nếu cần */
+        padding-bottom: 5px;
+    }
+
+    /* Cập nhật .number-circle */
+    .number-circle {
+        display: inline-flex;
+        justify-content: center;
+        align-items: center;
+        /* ... (Giữ nguyên kích thước và màu sắc) ... */
+        margin-right: 8px; /* Tăng khoảng cách giữa các số */
+    }
+</style>
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public List<string> CandidatesDisplay { get; set; }
+    [Parameter] public EventCallback<int> OnConfirmSingle { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private int SelectedIndex = -1;
+
+    protected override void OnParametersSet()
+    {
+        if (!IsVisible) SelectedIndex = -1;
+    }
+
+    private void SelectItem(int index)
+    {
+        if (SelectedIndex == index) SelectedIndex = -1;
+        else SelectedIndex = index;
+    }
+
+    private async Task ConfirmSelection()
+    {
+        if (SelectedIndex != -1) await OnConfirmSingle.InvokeAsync(SelectedIndex);
+    }
+}

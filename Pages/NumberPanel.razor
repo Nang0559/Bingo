@@ -1,0 +1,94 @@
+﻿@inject IJSRuntime JSRuntime
+<div class="number-panel-grid">
+    @for (int i = 1; i <= 75; i++)
+    {
+        // 💥 GIẢI PHÁP: TẠO BIẾN CỤC BỘ ĐỂ BUỘC GIÁ TRỊ 💥
+        var fixedNumber = i;
+
+        var isUnavailable = IsDrawnOrSelecting(fixedNumber);
+
+        <div @key="i"
+             id="@($"ball-{fixedNumber}")" 
+             @onclick="() => HandleClick(fixedNumber)" 
+             class="@(isUnavailable ? "number-circle drawn" : "number-circle")">
+            @fixedNumber.ToString("00")
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public EventCallback<int> OnNumberSelected { get; set; }
+    [Parameter]
+    // EventCallback mới: truyền cả số và tọa độ khởi đầu
+    public EventCallback<Tuple<int, float, float>> OnNumberSelectedWithCoords { get; set; }
+    [Parameter]
+    public HashSet<int> DrawnNumbers { get; set; } = new HashSet<int>();
+
+    [Parameter] // 💥 Thêm tham số này 💥
+    public List<int> CurrentSelectedNumbers { get; set; } = new List<int>();
+
+    private async Task HandleClick(int number)
+    {
+        // 1. Kiểm tra logic (Đã đúng)
+        if (!DrawnNumbers.Contains(number) && !CurrentSelectedNumbers.Contains(number))
+        {
+            // 2. Lấy tọa độ của quả bóng (Chúng ta cần ID cho mỗi bóng)
+            var elementId = $"ball-{number}";
+            var position = await JSRuntime.InvokeAsync<PositionData>(
+                "AnimationHelper.getClickPosition", elementId);
+
+            if (position != null)
+            {
+                // 3. Gửi số và tọa độ về Index.razor
+                await OnNumberSelectedWithCoords.InvokeAsync(
+                    Tuple.Create(number, position.top, position.left));
+            }
+        }
+    }
+
+    private bool IsDrawnOrSelecting(int number)
+        => DrawnNumbers.Contains(number) || CurrentSelectedNumbers.Contains(number);
+}
+
+<style>
+    /* CSS cho thanh 75 số */
+    .number-panel-grid {
+        display: flex;
+        flex-wrap: wrap; /* 💥 BỔ SUNG HOẶC SỬA ĐỔI: Cho phép xuống dòng 💥 */
+        justify-content: center; /* Căn giữa các quả bóng */
+        gap: 8px; /* Khoảng cách giữa các quả bóng */
+        /* Xóa các thuộc tính ngăn xuống dòng: */
+        overflow-x: hidden; /* Không cho phép cuộn ngang */
+        white-space: normal; /* Đảm bảo nội dung không ở một dòng */
+        /* Điều chỉnh Padding/Margin nếu cần */
+        padding: 5px 10px;
+    }
+
+    .number-circle {
+        min-width: 45px;
+        height: 45px;
+        border-radius: 50%;
+        background-color: #28a745; /* Màu xanh lá cây mặc định */
+        color: white;
+        font-weight: bold;
+        font-size: 1.1rem;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        flex-shrink: 0; /* Quan trọng: Ngăn không cho các số co lại */
+    }
+
+        .number-circle:hover:not(.drawn) {
+            background-color: #218838;
+            transform: scale(1.05);
+        }
+
+        .number-circle.drawn {
+            background-color: #6c757d; /* Màu xám khi số đã được chọn */
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+</style>

@@ -1,0 +1,295 @@
+﻿@inject IJSRuntime JSRuntime
+
+<div class="history-input-wrapper">
+
+    <h4>Chọn Ảnh Quay Thưởng</h4>
+    <div class="reward-image-container">
+        @foreach (var image in RewardImages)
+        {
+            <img src="@image.ImagePath"
+                 @onclick="() => SelectImage(image)"
+                 class="@(image.IsUsed ? "reward-image used" : (image.IsSelected ? "reward-image selected" : "reward-image"))"
+                 alt="Phần thưởng @image.Id" />
+        }
+    </div>
+
+    <h4>Nhập Dãy Số Phụ (Phân tách bằng dấu ',')</h4>
+
+    <div class="input-group mb-3">
+        <input type="text" @bind="InputNumbers" class="form-control"
+               placeholder="Ví dụ: 01, 05, 12, 20..." @onkeyup="@EnterKeyHandler" />
+
+        <button class="btn btn-primary" @onclick="CheckAndAddWinner"
+                disabled="@(SelectedReward == null)">
+            Kiểm tra & Thêm
+        </button>
+    </div>
+
+    @* --- 1. GIỮ NGUYÊN HIỂN THỊ DANH SÁCH TRÊN MÀN HÌNH --- *@
+    @if (_tempSessionWinnersDisplay.Any())
+    {
+        <div class="pending-winners-area">
+            <h5>Danh sách đang chờ trao giải (@_tempSessionWinnersDisplay.Count):</h5>
+            <ul class="list-group mb-3">
+                @for (int i = 0; i < _tempSessionWinnersDisplay.Count; i++)
+                {
+                    var item = _tempSessionWinnersDisplay[i];
+                    var key = _tempSessionWinners[i];
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span><strong>Vé @(i + 1):</strong> @item</span>
+                        <button class="btn btn-sm btn-outline-danger"
+                                @onclick="() => RemoveTempWinner(key, item)">
+                            Xóa
+                        </button>
+                    </li>
+                }
+            </ul>
+        </div>
+    }
+
+    @* --- 2. NÚT MỞ POPUP DANH SÁCH (ĐỂ CHECKBOX) --- *@
+    <button class="btn btn-warning w-100 mb-4 fw-bold"
+            @onclick="() => isCandidatePopupVisible = true"
+            disabled="@(!_tempSessionWinners.Any() || SelectedReward == null)">
+        📑 Mở Bảng Chọn & Trao Giải
+    </button>
+
+    <div class="history-area-content">
+        <h3>Lịch sử Quay Thưởng (Ảnh Chụp)</h3>
+        <div class="captured-images-list">
+            @foreach (var imageBase64 in HistoryImages)
+            {
+                <img src="@imageBase64" alt="Ảnh chụp lịch sử" class="history-snapshot" />
+            }
+        </div>
+
+        @* --- CÁC POPUP --- *@
+
+        @* A. POPUP TRUNG GIAN: Chọn người trúng *@
+        <CandidateSelectionPopup IsVisible="@isCandidatePopupVisible"
+                                 CandidatesDisplay="@_tempSessionWinnersDisplay"
+                                 OnConfirmSingle="HandleCandidateConfirmed"
+                                 OnCancel="() => isCandidatePopupVisible = false" />
+
+        @* B. POPUP WINNER (PHÁO HOA): Chỉ hiện 1 người đã chọn *@
+        @if (isPopupVisible)
+        {
+            <div class="global-fireworks-layer"></div>
+        }
+
+        <PopupComponent IsVisible="@isPopupVisible"
+                        ParsedNumbers="@_currentFinalNumbers"
+                        RewardImage="@SelectedReward"
+                        OnCaptureComplete="HandleSingleCaptureComplete" />
+
+        <SummaryPopupComponent IsVisible="@isSummaryPopupVisible"
+                               HistoryImages="@HistoryImages" />
+    </div>
+
+</div>
+
+<style>
+    /* Giữ nguyên CSS cũ của bạn */
+    .reward-image-container {
+        display: flex;
+        justify-content: space-around;
+        margin-bottom: 20px;
+    }
+
+    .reward-image {
+        width: 60px;
+        height: 60px;
+        border: 2px solid transparent;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+        .reward-image:hover:not(.used) {
+            transform: scale(1.1);
+        }
+
+        .reward-image.used {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .reward-image.selected {
+            border-color: #ffc107;
+            box-shadow: 0 0 10px rgba(255, 193, 7, 0.5);
+        }
+
+    .captured-images-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        max-height: 400px;
+        overflow-y: auto;
+        padding: 5px;
+        border: 1px solid #eee;
+    }
+
+    .history-snapshot {
+        width: 100%;
+        border: 1px solid #ccc;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .pending-winners-area {
+        background-color: #f8f9fa;
+        padding: 10px;
+        border-radius: 5px;
+        border: 1px dashed #28a745;
+        margin-bottom: 15px;
+    }
+</style>
+
+@code {
+    // Parameter giữ nguyên
+    [Parameter] public HashSet<int> DrawnNumbers { get; set; } = new HashSet<int>();
+    [Parameter] public List<int> CurrentSelectedNumbers { get; set; } = new List<int>();
+    [Parameter] public EventCallback<string> OnDrawComplete { get; set; }
+    [Parameter] public List<string> HistoryImages { get; set; } = new List<string>();
+
+    // Biến Popup
+    public bool isPopupVisible = false;
+    private bool isSummaryPopupVisible = false;
+    private bool isCandidatePopupVisible = false; // Popup danh sách trung gian
+
+    // Data
+    private HashSet<string> UsedWinningCombinations { get; set; } = new HashSet<string>();
+    private List<string> _tempSessionWinners = new List<string>(); // Key
+    private List<string> _tempSessionWinnersDisplay = new List<string>(); // Display
+
+    // Xử lý vé được chọn
+    private int _processingIndex = -1;
+    private List<string> _currentFinalNumbers = new List<string>();
+
+    // Reward Class & List (Giữ nguyên)
+    public class RewardImage { public int Id; public string Name; public string ImagePath = $"images/reward{new Random().Next(1, 6)}.png"; public bool IsUsed; public bool IsSelected; }
+    private List<RewardImage> RewardImages = new List<RewardImage> {
+        new RewardImage { Id=1, Name="GiaiNhat", ImagePath="images/reward1.png" },
+        new RewardImage { Id=2, Name="GiaiNhi", ImagePath="images/reward2.png" },
+        new RewardImage { Id=3, Name="GiaiBa", ImagePath="images/reward3.png" },
+        new RewardImage { Id=4, Name="GiaiTu", ImagePath="images/reward4.png" },
+        new RewardImage { Id=5, Name="GiaiKK", ImagePath="images/reward5.png" }
+    };
+    private RewardImage SelectedReward = null;
+    private string InputNumbers { get; set; } = "";
+
+    private void SelectImage(RewardImage image)
+    {
+        if (image.IsUsed) return;
+        if (SelectedReward != null) SelectedReward.IsSelected = false;
+        image.IsSelected = true; SelectedReward = image;
+    }
+    private void EnterKeyHandler(KeyboardEventArgs e) { if (e.Code == "Enter") CheckAndAddWinner(); }
+
+    // --- LOGIC 1: THÊM VÀO DANH SÁCH (Giữ nguyên logic của bạn) ---
+    private void CheckAndAddWinner()
+    {
+        if (string.IsNullOrWhiteSpace(InputNumbers) || SelectedReward == null)
+        {
+            JSRuntime.InvokeVoidAsync("showCustomError", "Vui lòng chọn giải và nhập dãy số."); return;
+        }
+        var parsedValidNumbers = new List<int>();
+        var inputNumberStrings = InputNumbers.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
+        foreach (var s in inputNumberStrings) { if (int.TryParse(s, out int n)) parsedValidNumbers.Add(n); }
+
+        bool hasRequiredCount = parsedValidNumbers.Count == 4 || parsedValidNumbers.Count == 5;
+        // b. Kiểm tra tính duy nhất (các số có khác nhau không?)
+        bool isDistinct = parsedValidNumbers.Count == parsedValidNumbers.Distinct().Count(); // <<< KIỂM TRA MỚI
+        bool allNumbersMatch = hasRequiredCount && parsedValidNumbers.All(n => CurrentSelectedNumbers.Contains(n));
+        bool allInputsValid = inputNumberStrings.Count == parsedValidNumbers.Count;
+        bool isWinner = hasRequiredCount && allNumbersMatch && allInputsValid&&isDistinct;
+
+        if (!isWinner)
+        {
+            JSRuntime.InvokeVoidAsync("showCustomError", "Dãy số không hợp lệ hoặc không trúng thưởng."); return;
+        }
+
+        string winningKey = string.Join("-", parsedValidNumbers.OrderBy(n => n));
+        if (UsedWinningCombinations.Contains(winningKey))
+        {
+            JSRuntime.InvokeVoidAsync("showCustomError", "Bộ số này ĐÃ ĐƯỢC trao thưởng trước đó."); return;
+        }
+        if (_tempSessionWinners.Contains(winningKey))
+        {
+            JSRuntime.InvokeVoidAsync("showCustomError", "Bộ số này đã có trong danh sách chờ."); return;
+        }
+
+        _tempSessionWinners.Add(winningKey);
+        string display = string.Join(", ", parsedValidNumbers.OrderBy(n => n).Select(n => n.ToString("D2")));
+        _tempSessionWinnersDisplay.Add(display);
+        InputNumbers = "";
+        StateHasChanged();
+    }
+
+    private void RemoveTempWinner(string key, string item)
+    {
+        int idx = _tempSessionWinners.IndexOf(key);
+        if (idx >= 0) { _tempSessionWinners.RemoveAt(idx); _tempSessionWinnersDisplay.RemoveAt(idx); StateHasChanged(); }
+    }
+
+    // --- LOGIC 2: XỬ LÝ SAU KHI CHỌN TỪ POPUP TRUNG GIAN ---
+    private void HandleCandidateConfirmed(int index)
+    {
+        // 1. Đóng popup trung gian
+        isCandidatePopupVisible = false;
+
+        // 2. Lưu lại vé đang xử lý
+        _processingIndex = index;
+
+        // 3. Chuẩn bị dãy số cho Popup Pháo hoa (Tách chuỗi "01, 05" thành List ["01","05"])
+        string rawDisplay = _tempSessionWinnersDisplay[index];
+        _currentFinalNumbers = rawDisplay.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                                         .Select(s => s.Trim())
+                                         .ToList();
+
+        // 4. Mở Popup Pháo hoa
+        isPopupVisible = true;
+        StateHasChanged();
+    }
+
+    // --- LOGIC 3: XỬ LÝ SAU KHI CHỤP ẢNH ---
+    private async Task HandleSingleCaptureComplete(string base64Image)
+    {
+        await OnDrawComplete.InvokeAsync(base64Image);
+
+        if (_processingIndex >= 0 && _processingIndex < _tempSessionWinners.Count && SelectedReward != null)
+        {
+            string winnerKey = _tempSessionWinners[_processingIndex];
+            UsedWinningCombinations.Add(winnerKey);
+
+            string rewardName = SelectedReward.Name ?? $"Reward_{SelectedReward.Id}";
+            string fileName = $"{rewardName}_{winnerKey}_{DateTime.Now:HHmmss}.png";
+            await JSRuntime.InvokeVoidAsync("SaveFile", fileName, base64Image);
+
+            // Xóa vé vừa trao khỏi danh sách
+            // (Lưu ý: dùng RemoveAt index cũ cần cẩn thận nếu danh sách biến động, nhưng flow này an toàn vì modal chặn thao tác khác)
+            // _tempSessionWinners.RemoveAt(_processingIndex);
+            // _tempSessionWinnersDisplay.RemoveAt(_processingIndex);
+
+            // _processingIndex = -1;
+            _tempSessionWinners.Clear();
+            _tempSessionWinnersDisplay.Clear();
+            _processingIndex = -1; // Reset index xử lý
+            // 3. KIỂM TRA ĐIỀU KIỆN KHOÁ ẢNH: Chỉ khóa khi danh sách tạm rỗng
+
+            // --- THỰC HIỆN "KHOÁ ẢNH" ---
+            SelectedReward.IsUsed = true;
+            SelectedReward.IsSelected = false;
+            SelectedReward = null;
+        }
+
+        isPopupVisible = false;
+        // Kiểm tra xem TẤT CẢ các giải thưởng đã được sử dụng chưa
+        bool allRewardsUsed = RewardImages.All(r => r.IsUsed);
+
+        if (allRewardsUsed)
+        {
+            // Nếu tất cả đều đã dùng, mở Summary Popup
+            isSummaryPopupVisible = true;
+        }
+        StateHasChanged();
+    }
+}

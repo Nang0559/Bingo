@@ -1,0 +1,418 @@
+﻿@inject IJSRuntime JSRuntime
+
+<div class="history-input-wrapper">
+
+    <h4>Chọn Ảnh Quay Thưởng</h4>
+    <div class="reward-image-container">
+        @foreach (var image in RewardImages)
+        {
+            <img src="@image.ImagePath"
+                 @onclick="() => SelectImage(image)"
+                 class="@(image.IsUsed ? "reward-image used" : (image.IsSelected ? "reward-image selected" : "reward-image"))"
+                 alt="Phần thưởng @image.Id" />
+        }
+    </div>
+
+    <h4>Nhập Dãy Số Phụ (Phân tách bằng dấu ',')</h4>
+    <input type="text" @bind="InputNumbers" class="form-control mb-3"
+           placeholder="Ví dụ: 4 hoặc 5 số" />
+    <button @onclick="CheckForWinAndShowPopup"
+            disabled="@(!CurrentSelectedNumbers.Any() || SelectedReward == null)">
+        Mở Popup & Chụp (@(CurrentSelectedNumbers.Count) số)
+    </button>
+    <div class="history-area-content">
+        <h3>Lịch sử Quay Thưởng (Ảnh Chụp)</h3>
+        <div class="captured-images-list">
+            @foreach (var imageBase64 in HistoryImages)
+            {
+                <img src="@imageBase64" alt="Ảnh chụp lịch sử" class="history-snapshot" />
+            }
+        </div>
+
+        @if (isPopupVisible)
+        {
+            @* 💥 PHÁO HOA LÀ MỘT LỚP PHỦ RIÊNG BIỆT TRÊN CÙNG 💥 *@
+            <div class="global-fireworks-layer"></div>
+        }
+
+        <PopupComponent IsVisible="@isPopupVisible"
+                        ParsedNumbers="@ParseInputNumbers()"
+                       @*  RewardImage="@SelectedReward" *@
+                        OnCaptureComplete="HandleCaptureCompleteFromPopup" />
+        @* 💥 THÊM POPUP TỔNG KẾT 💥 *@
+        <SummaryPopupComponent IsVisible="@isSummaryPopupVisible"
+                               HistoryImages="@HistoryImages" />
+    </div>
+
+</div>
+<style>
+    .reward-image-container {
+        display: flex;
+        justify-content: space-around;
+        margin-bottom: 20px;
+    }
+
+    .reward-image {
+        width: 60px;
+        height: 60px;
+        border: 2px solid transparent;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+        .reward-image:hover:not(.used) {
+            transform: scale(1.1);
+        }
+
+        .reward-image.used {
+            opacity: 0.3; /* Ảnh đã dùng sẽ mờ đi */
+            cursor: not-allowed;
+        }
+
+        .reward-image.selected {
+            border-color: #ffc107; /* Viền vàng nổi bật khi chọn */
+            box-shadow: 0 0 10px rgba(255, 193, 7, 0.5);
+        }
+    /* CSS cho ảnh chụp lịch sử */
+    .captured-images-list {
+        display: flex;
+        flex-direction: column; /* Xếp ảnh chụp theo cột */
+        gap: 10px;
+        max-height: 400px; /* Giới hạn chiều cao */
+        overflow-y: auto;
+        padding: 5px;
+        border: 1px solid #eee;
+    }
+
+    .history-snapshot {
+        width: 100%;
+        border: 1px solid #ccc;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+</style>
+
+@code {
+    // Inject JSRuntime đã có
+    [Parameter]
+    public HashSet<int> DrawnNumbers { get; set; } = new HashSet<int>();
+
+    // 💥 CẬP NHẬT: Thay thế int? SelectedNumber bằng List<int> CurrentSelectedNumbers 💥
+    [Parameter]
+    public List<int> CurrentSelectedNumbers { get; set; } = new List<int>();
+
+    [Parameter]
+    // Cập nhật EventCallback: chỉ cần gửi chuỗi ảnh Base64
+    public EventCallback<string> OnDrawComplete { get; set; }
+    [Parameter]
+    public List<string> HistoryImages { get; set; } = new List<string>();
+  
+    public bool isPopupVisible = false;
+    private bool isSummaryPopupVisible = false;
+    private HashSet<string> UsedWinningCombinations { get; set; } = new HashSet<string>();
+
+    // Biến lưu trữ các bộ số thắng cuộc trong phiên kiểm tra hiện tại (VD: ["01-05-10-12", "02-08-20-25"])
+    private List<string> _tempSessionWinners = new List<string>();
+
+    // (Tùy chọn) Biến để hiển thị ra UI cho đẹp
+    private List<string> _tempSessionWinnersDisplay = new List<string>();
+    // Định nghĩa Class RewardImage (đặt ở ngoài cùng file .razor hoặc ở nơi chung)
+    public class RewardImage
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public string ImagePath { get; set; } = $"images/reward{new Random().Next(1, 6)}.png"; // Đặt ảnh mẫu
+        public bool IsUsed { get; set; } = false;
+        public bool IsSelected { get; set; } = false;
+    }
+
+    private List<RewardImage> RewardImages = new List<RewardImage>
+    {
+        new RewardImage { Id = 1, Name = "GiaiNhat", ImagePath = "images/reward1.png" },
+    new RewardImage { Id = 2, Name = "GiaiNhi", ImagePath = "images/reward2.png" },
+    new RewardImage { Id = 3, Name = "GiaiBa", ImagePath = "images/reward3.png" },
+    new RewardImage { Id = 4, Name = "GiaiTu", ImagePath = "images/reward4.png" },
+    new RewardImage { Id = 5, Name = "GiaiKhuyenKhich", ImagePath = "images/reward5.png" }
+    };
+
+    private RewardImage SelectedReward = null;
+    private string InputNumbers { get; set; } = "00,11,22,33,44"; // Giá trị mặc định
+
+    private void SelectImage(RewardImage image)
+    {
+        if (image.IsUsed) return;
+
+        if (SelectedReward != null)
+        {
+            SelectedReward.IsSelected = false;
+        }
+
+        image.IsSelected = true;
+        SelectedReward = image;
+    }
+
+    public List<string> ParseInputNumbers()
+    {
+        if (string.IsNullOrWhiteSpace(InputNumbers))
+        {
+            return new List<string>();
+        }
+        return InputNumbers.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                           .Select(s => s.Trim())
+                           .ToList();
+    }
+    private void CheckAndAddWinner()
+    {
+        // 1. Kiểm tra điều kiện đầu vào cơ bản
+        if (string.IsNullOrWhiteSpace(InputNumbers) || SelectedReward == null)
+        {
+            JSRuntime.InvokeVoidAsync("showCustomError", "Vui lòng chọn giải và nhập dãy số.");
+            return;
+        }
+
+        // 2. Phân tích và chuẩn hóa (Giữ nguyên logic cũ của bạn)
+        var parsedValidNumbers = new List<int>();
+        var inputNumberStrings = InputNumbers
+            .Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => s.Trim())
+            .ToList();
+
+        foreach (var s in inputNumberStrings)
+        {
+            if (int.TryParse(s, out int n)) parsedValidNumbers.Add(n);
+        }
+
+        // 3. LOGIC VALIDATE (Giữ nguyên logic cũ)
+        bool hasRequiredCount = parsedValidNumbers.Count == 4 || parsedValidNumbers.Count == 5;
+        bool allNumbersMatch = hasRequiredCount && parsedValidNumbers.All(n => CurrentSelectedNumbers.Contains(n));
+        bool allInputsValid = inputNumberStrings.Count == parsedValidNumbers.Count;
+        bool isWinner = hasRequiredCount && allNumbersMatch && allInputsValid;
+
+        if (!isWinner)
+        {
+            // Xử lý lỗi như cũ
+            string alertMessage;
+            if (!allInputsValid) alertMessage = "Dãy số chứa ký tự không hợp lệ.";
+            else if (!hasRequiredCount) alertMessage = $"Yêu cầu 4 hoặc 5 số. Bạn nhập {parsedValidNumbers.Count}.";
+            else alertMessage = "Các số nhập vào không khớp với kết quả quay.";
+
+            JSRuntime.InvokeVoidAsync("showCustomError", alertMessage);
+            return; // Dừng lại nếu không trúng
+        }
+
+        // 4. Tạo khóa chuẩn hóa
+        string winningKey = string.Join("-", parsedValidNumbers.OrderBy(n => n));
+
+        // 5. KIỂM TRA TRÙNG LẶP (Logic quan trọng mới)
+
+        // A. Kiểm tra xem đã trao giải này trong quá khứ chưa
+        if (UsedWinningCombinations.Contains(winningKey))
+        {
+            JSRuntime.InvokeVoidAsync("showCustomError", $"Bộ số ({winningKey}) này ĐÃ ĐƯỢC trao thưởng trước đó.");
+            return;
+        }
+
+        // B. Kiểm tra xem vừa mới thêm vào danh sách tạm thời chưa (tránh click 2 lần hoặc nhập lại)
+        if (_tempSessionWinners.Contains(winningKey))
+        {
+            JSRuntime.InvokeVoidAsync("showCustomError", $"Bộ số ({winningKey}) này vừa được thêm vào danh sách chờ.");
+            return;
+        }
+
+        // 6. THÀNH CÔNG: Thêm vào danh sách tạm
+        _tempSessionWinners.Add(winningKey);
+        _tempSessionWinnersDisplay.Add(string.Join(", ", parsedValidNumbers)); // Để hiển thị UI
+
+        // Reset ô nhập liệu để nhập người tiếp theo
+        InputNumbers = string.Empty;
+
+        // Thông báo nhẹ (Toast) thay vì Popup lỗi
+        JSRuntime.InvokeVoidAsync("console.log", "Đã thêm bộ số trúng thưởng: " + winningKey);
+
+        StateHasChanged();
+    }
+    // private void OpenFinalPopup()
+    // {
+    //     // 1. Kiểm tra xem có ai trúng chưa
+    //     if (_tempSessionWinners.Count == 0)
+    //     {
+    //         JSRuntime.InvokeVoidAsync("showCustomError", "Danh sách trúng thưởng đang trống. Vui lòng kiểm tra vé trước.");
+    //         return;
+    //     }
+
+    //     // 2. Chuẩn bị dữ liệu cho Popup
+    //     // Giả sử trong Popup bạn có một biến string để hiển thị danh sách người trúng
+    //     // Ví dụ: PopupWinnerListString
+    //     PopupWinnerListString = string.Join("\n", _tempSessionWinnersDisplay);
+
+    //     // 3. Mở Popup
+    //     isPopupVisible = true;
+    //     StateHasChanged();
+    // }
+    // private void CheckForWinAndShowPopup()
+    // {
+    //     // 1. Kiểm tra điều kiện bắt buộc để chạy logic
+    //     if (SelectedReward == null)
+    //     {
+    //         // Có thể thêm cảnh báo nếu chưa chọn ảnh thưởng
+    //         return;
+    //     }
+
+    //     // 2. Phân tích số nhập vào (ví dụ: "01,15,7")
+    //     var inputNumbers = ParseInputNumbers();
+
+    //     // 3. LOGIC KIỂM TRA CHÚNG THƯỞNG:
+    //     // Đảm bảo TẤT CẢ các số nhập vào (nếu có) phải nằm trong CurrentSelectedNumbers.
+    //     bool isWinner = inputNumbers.Any() &&
+    //                     inputNumbers.All(s =>
+    //                         int.TryParse(s, out int n) &&
+    //                         CurrentSelectedNumbers.Contains(n)
+    //                     );
+
+    //     // 4. Kiểm tra điều kiện cuối cùng
+    //     if (isWinner)
+    //     {
+    //         // Thỏa mãn điều kiện chúng thưởng, mở popup
+    //         isPopupVisible = true;
+    //     }
+    //     else
+    //     {
+    //         // Không thỏa mãn, không mở popup và có thể cảnh báo người dùng.
+    //         JSRuntime.InvokeVoidAsync("alert", "Các số phụ nhập vào không khớp với tất cả các số đã quay. Không đủ điều kiện chúng thưởng.");
+    //     }
+    //     StateHasChanged();
+    // }
+    private void CheckForWinAndShowPopup()
+    {
+        // 1. Kiểm tra điều kiện bắt buộc
+        if (SelectedReward == null)
+        {
+            JSRuntime.InvokeVoidAsync("showCustomError", "Chưa chọn giải thưởng ?");
+            return;
+        }
+
+        // 2. Phân tích và chuẩn hóa số nhập vào
+        // Chúng ta tạo một List<int> các số hợp lệ đã được nhập
+        var parsedValidNumbers = new List<int>();
+
+        // Lấy các chuỗi số từ InputNumbers, làm sạch và cố gắng chuyển đổi
+        var inputNumberStrings = InputNumbers
+            .Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => s.Trim())
+            .ToList();
+
+        foreach (var s in inputNumberStrings)
+        {
+            if (int.TryParse(s, out int n))
+            {
+                parsedValidNumbers.Add(n);
+            }
+        }
+
+        // 3. LOGIC KIỂM TRA CHÚNG THƯỞNG MỚI:
+
+        // Điều kiện A: Phải nhập ĐỦ 4 số (và là 4 số hợp lệ)
+        bool hasRequiredCount = parsedValidNumbers.Count == 4 || parsedValidNumbers.Count == 5; 
+
+        // Điều kiện B: TẤT CẢ 4 số hợp lệ đó phải có trong CurrentSelectedNumbers (ô 70%)
+        bool allNumbersMatch = hasRequiredCount &&
+                               parsedValidNumbers.All(n => CurrentSelectedNumbers.Contains(n));
+
+        // Điều kiện C: Không được có số nhập vào không hợp lệ (ví dụ: "01, 15, ABC, 7")
+        // Kiểm tra số lượng chuỗi đã nhập có khớp với số lượng số hợp lệ không
+        bool allInputsValid = inputNumberStrings.Count == parsedValidNumbers.Count;
+
+        // 4. Kiểm tra điều kiện cuối cùng
+        bool isWinner = hasRequiredCount && allNumbersMatch && allInputsValid;
+
+        // Tạo khóa chuẩn hóa (Chỉ cần tạo một lần)
+        string winningKey = string.Join("-", parsedValidNumbers.OrderBy(n => n));
+
+        // 💥 BỔ SUNG: Biến theo dõi lỗi trùng lặp 💥
+        bool isDuplicate = false;
+
+        // 5. Kiểm tra Trùng lặp (Chỉ khi đã thắng)
+        if (isWinner)
+        {
+            if (UsedWinningCombinations.Contains(winningKey))
+            {
+                // Trùng lặp!
+                isWinner = false; // Đặt lại cờ thắng
+                isDuplicate = true; // Đặt cờ trùng lặp
+                JSRuntime.InvokeVoidAsync("showCustomError", $"Bộ 4 hoặc 5 số ({winningKey}) này đã được sử dụng để nhận thưởng trước đó. Vui lòng kiểm tra lại.");
+            }
+        }
+
+        if (isWinner)
+        {
+            // 6. Thỏa mãn điều kiện trúng thưởng, mở popup
+            isPopupVisible = true;
+        }
+        else
+        {
+            // 7. Hiển thị thông báo lỗi (Chỉ khi KHÔNG phải lỗi trùng lặp)
+            if (!isDuplicate)
+            {
+                string alertMessage;
+                if (!allInputsValid) { alertMessage = "Dãy số nhập vào có chứa ký tự không phải là số hoặc định dạng không đúng. Vui lòng kiểm tra lại."; }
+                else if (!hasRequiredCount) { alertMessage = $"Dãy số phải có ĐỦ 4 hoặc 5 số. Hiện tại bạn đã nhập {parsedValidNumbers.Count} số."; }
+                else { alertMessage = "Tất cả 4 hoặc 5 số nhập vào phải khớp với các số đã quay . Không đủ điều kiện trúng thưởng."; }
+
+                JSRuntime.InvokeVoidAsync("showCustomError", alertMessage);
+            }
+        }
+
+        StateHasChanged();
+    }
+    private async Task HandleCaptureCompleteFromPopup(string base64Image)
+    {
+        // 1. Gửi chuỗi ảnh Base64 về component cha (Index.razor)
+        await OnDrawComplete.InvokeAsync(base64Image);
+
+        // 2. PHÂN TÍCH SỐ NHẬP VÀO (Cần thiết cho cả tên file và logic UsedWinningCombinations)
+        var parsedNumbers = ParseInputNumbers()
+                            .Select(s => int.TryParse(s, out int n) ? (int?)n : null)
+                            .Where(n => n.HasValue)
+                            .Select(n => n.Value)
+                            .ToList();
+
+        // 3. LOGIC XỬ LÝ KHI CÓ ẢNH THƯỞNG ĐƯỢC CHỌN
+        if (SelectedReward != null)
+        {
+            // 3.1. Tạo Winning Key và Lưu vào Lịch sử (Chỉ khi đủ 4 số)
+            if (parsedNumbers.Count == 4 || parsedNumbers.Count == 5)
+            {
+                // Tạo khóa chuẩn hóa (sắp xếp và nối lại)
+                string winningKey = string.Join("-", parsedNumbers.OrderBy(n => n));
+
+                // 💥 BỔ SUNG LOGIC LƯU LỊCH SỬ BỘ SỐ 💥
+                UsedWinningCombinations.Add(winningKey);
+            }
+
+            // 3.2. Tạo Tên File và Tải xuống
+            string rewardName = SelectedReward.Name ?? $"Reward_{SelectedReward.Id}";
+            string numbersString = string.Join("-", parsedNumbers.OrderBy(n => n).Select(n => n.ToString("D2")));
+            string fileName = $"{rewardName}_{numbersString}.png";
+
+            // Gọi hàm JS để tải ảnh xuống
+            await JSRuntime.InvokeVoidAsync("SaveFile", fileName, base64Image);
+
+            // 3.3. Cập nhật trạng thái ảnh thưởng (đã dùng)
+            SelectedReward.IsUsed = true;
+            SelectedReward.IsSelected = false;
+            SelectedReward = null;
+        }
+        // ----------------------------------------------------
+
+        // 4. Tắt Popup (Logic này đã đúng)
+        isPopupVisible = false;
+
+        // 5. Kiểm tra và Hiển thị Popup Tổng thể
+        bool allRewardsUsed = RewardImages.All(r => r.IsUsed);
+        if (allRewardsUsed)
+        {
+            isSummaryPopupVisible = true;
+        }
+
+        StateHasChanged();
+    }
+}

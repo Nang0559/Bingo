@@ -1,0 +1,87 @@
+﻿@inject IJSRuntime JSRuntime
+@using static Bingo.Pages.HistoryAndInput
+@* Trong PopupComponent.razor *@
+
+@if (IsVisible)
+{
+    <div class="popup-overlay">
+        <div class="fireworks-effect"></div>
+        <div class="popup-content" id="popup-content-to-capture">
+
+            <h2>Chúc mừng!</h2>
+            <img src="@RewardImage.ImagePath" class="popup-reward-image" alt="Phần thưởng" />
+
+            <div class="number-balls-container">
+                @foreach (var num in ParsedNumbers)
+                {
+                    <div class="blue-number-ball">
+                        @num
+                    </div>
+                }
+            </div>
+
+            <button @onclick="ClosePopupAndCapture">Xác nhận & Chụp</button>
+
+            
+
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    [Parameter]
+    public List<string> ParsedNumbers { get; set; }
+
+    [Parameter]
+    public RewardImage RewardImage { get; set; }
+
+    [Parameter]
+    public EventCallback OnCloseAndCapture { get; set; }
+    [Parameter]
+    public EventCallback<string> OnCaptureComplete { get; set; }
+    private bool isConfettiStarted = false;
+    protected override void OnParametersSet()
+    {
+        if (IsVisible == false)
+        {
+            // Đặt lại cờ khi Popup bị ẩn
+            isConfettiStarted = false;
+        }
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // 💥 SỬA ĐỔI CHÍNH: Chỉ gọi startConfetti một lần duy nhất 💥
+        if (IsVisible && !isConfettiStarted)
+        {
+            await JSRuntime.InvokeVoidAsync("ConfettiHelper.startConfetti");
+            isConfettiStarted = true;
+        }
+
+        // 💥 XÓA LOGIC DỪNG TẠI ĐÂY 💥
+        // KHÔNG CẦN ELSE BLOCK ĐỂ GỌI stopConfetti NỮA, vì nó đã được gọi trong ClosePopupAndCapture
+
+        await base.OnAfterRenderAsync(firstRender);
+    }
+    private async Task ClosePopupAndCapture()
+    {
+        // 1. Gọi hàm JavaScript để chụp ảnh
+        // Lưu ý: ID 'popup-content-to-capture' phải khớp với ID trong HTML
+        string base64Image = await JSRuntime.InvokeAsync<string>(
+            "BingoCapture.captureElement",
+            "popup-content-to-capture"
+        );
+        // 💥 BỔ SUNG: DỪNG PHÁO HOA NGAY LẬP TỨC 💥
+        await JSRuntime.InvokeVoidAsync("ConfettiHelper.stopConfetti");
+        // 2. Chuyển chuỗi Base64 ảnh chụp về component cha
+        if (!string.IsNullOrEmpty(base64Image))
+        {
+            await OnCaptureComplete.InvokeAsync(base64Image);
+        }
+
+        // 3. Tắt Popup
+        IsVisible = false;
+    }
+}

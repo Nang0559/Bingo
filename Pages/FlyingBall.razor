@@ -1,0 +1,63 @@
+﻿
+
+@if (IsFlying)
+{
+    <div id="@CloneId"
+         class="flying-ball-clone"
+         style="top: @(StartTop)px; left: @(StartLeft)px;">
+        @Number.ToString("00")
+    </div>
+}
+
+@code {
+    // 💥 ĐỊNH NGHĨA CLASS ĐỂ MAP DỮ LIỆU TỪ JAVASCRIPT 💥
+    // Các thuộc tính phải khớp chính xác với tên thuộc tính trong JavaScript (top, left, width, height)
+    [Parameter] public int Number { get; set; }
+    [Parameter] public float StartTop { get; set; }
+    [Parameter] public float StartLeft { get; set; }
+    [Parameter] public Action OnFlyComplete { get; set; }
+
+    private bool IsFlying = true;
+    private string CloneId => $"flying-ball-clone-{Number}"; // Đổi tên ID để tránh trùng
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (IsFlying)
+        {
+            if (JSRuntime == null) return;
+            // 1. Lấy vị trí đích của quả bóng mới trong vùng 70%
+            // Kiểu trả về là PositionData đã được định nghĩa
+            var targetPosition = await JSRuntime.InvokeAsync<PositionData>(
+            "AnimationHelper.getClickPosition",
+            "flying-target-anchor" // <-- Dùng ID của Anchor cố định
+        );
+
+            if (targetPosition != null)
+            {
+                // 💥 1. Tính toán dx và dy TRỰC TIẾP trong nội suy C#
+
+                // C# sẽ tính: (targetPosition.left - StartLeft) và (targetPosition.top - StartTop)
+                // sau đó chèn kết quả là một số (ví dụ: 150.5 và -200.0) vào chuỗi JS.
+
+                // JavaScript chỉ nhìn thấy: clone.style.transform = `translate(150.5px, -200.0px) scale(1.77)`;
+
+                await JSRuntime.InvokeVoidAsync("eval", $@"
+                    setTimeout(function() {{
+                        const clone = document.getElementById('{CloneId}');
+                        if (clone) {{
+                            // Sử dụng nội suy chuỗi C# để chèn kết quả phép tính
+                         
+
+                            clone.style.transform = `translate(${targetPosition.left - StartLeft}px, ${targetPosition.top - StartTop}px) scale(1.77)`;
+                            clone.style.opacity = '0.5';
+                        }}
+                    }}, 50);
+                ");
+                // 4. Hoàn thành hiệu ứng sau 800ms (thời gian transition)
+                await Task.Delay(800);
+                IsFlying = false;
+                OnFlyComplete?.Invoke();
+            }
+        }
+    }
+}
