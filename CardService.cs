@@ -91,6 +91,15 @@ namespace Bingo
         /// <summary>Danh sách thẻ theo 3 trạng thái: đã Bingo / chờ 1 số / chờ 2 số (thẻ đã trao thưởng không có trong danh sách).</summary>
         public record CardStatusLists(List<CardStatusItem> Winning, List<CardStatusItem> Missing1, List<CardStatusItem> Missing2);
 
+        /// <summary>Một thẻ được nhận vào danh sách chờ trao giải, kèm các hàng / cột / chéo đã đủ.</summary>
+        public record CardCodeAccepted(CardView Card, List<WinLine> Lines);
+
+        /// <summary>Một mã thẻ không nhận được. KeepInInput = nên giữ lại trong ô nhập để người dùng sửa / thử lại.</summary>
+        public record CardCodeProblem(int Code, string Text, bool KeepInInput);
+
+        /// <summary>Kết quả kiểm tra nhiều mã thẻ cùng lúc.</summary>
+        public record CardCodeResolution(List<CardCodeAccepted> Accepted, List<CardCodeProblem> Problems);
+
         /// <summary>Một thẻ để hiển thị (xem trước / tra cứu). Numbers = 25 ô theo hàng, 0 = FREE.</summary>
         public record CardView(int Index, string Code, string Who, int[] Numbers);
 
@@ -600,6 +609,83 @@ namespace Bingo
                 }
             }
             return lists;
+        }
+
+        /// <summary>
+        /// Các thẻ ĐÃ BINGO mà chưa trao thưởng (đã đủ 1 hàng / cột / đường chéo), theo thứ tự mã thẻ.
+        /// Detail = các đường đã đủ, ví dụ "Hàng 1 + Cột B đã đủ". Nhẹ hơn <see cref="GetStatusLists"/> vì chỉ xét "đã đủ".
+        /// </summary>
+        public List<CardStatusItem> GetBingoCards(IEnumerable<int> drawn)
+        {
+            var list = new List<CardStatusItem>();
+            if (_set == null) return list;
+
+            var marks = ToMarks(drawn);
+            for (int i = 0; i < _set.Cards.Count; i++)
+            {
+                if (_awarded.Count > 0 && _awarded.Contains(CardKey(i))) continue;
+
+                var card = _set.Cards[i];
+                List<string>? names = null;
+                for (int l = 0; l < Lines.Length; l++)
+                {
+                    bool full = true;
+                    foreach (var cell in Lines[l])
+                        if (cell != FreeCell && !marks[card[cell]]) { full = false; break; }
+                    if (full) (names ??= new()).Add(LineNames[l]);
+                }
+                if (names != null)
+                    list.Add(new CardStatusItem(i, CodeOf(i), WhoOf(i), "", $"{string.Join(" + ", names)} đã đủ"));
+            }
+            return list;
+        }
+
+        /// <summary>
+        /// Kiểm tra NHIỀU mã thẻ cùng lúc (người dùng gõ "#5, #12, #30"). Thẻ hợp lệ (đã Bingo, chưa trao, chưa nằm trong
+        /// danh sách chờ) được nhận; thẻ còn lại trả về kèm lý do. <paramref name="blockedReason"/> nhận khóa thẻ và trả về lý do
+        /// bị chặn (đã trao / đã có trong danh sách chờ) hoặc null nếu không bị chặn.
+        /// </summary>
+        public CardCodeResolution ResolveCodes(IEnumerable<int> codes, IEnumerable<int> drawn, Func<string, string?>? blockedReason = null)
+        {
+            var result = new CardCodeResolution(new(), new());
+            var drawnList = drawn as IList<int> ?? drawn.ToList();
+            var seen = new HashSet<int>();
+
+            foreach (var code in codes)
+            {
+                if (!seen.Add(code)) continue; // gõ trùng 1 mã nhiều lần: chỉ xét 1 lần
+
+                if (!TryGetByCode(code, out var card) || card == null)
+                {
+                    result.Problems.Add(new CardCodeProblem(code, $"#{code}: không có trong bộ thẻ đã phát hành (có {Count} thẻ).", true));
+                    continue;
+                }
+
+                if (IsAwarded(card.Index))
+                {
+                    result.Problems.Add(new CardCodeProblem(code, $"{card.Code}: đã được trao thưởng trước đó.", false));
+                    continue;
+                }
+
+                var reason = blockedReason?.Invoke(CardKey(card.Index));
+                if (reason != null)
+                {
+                    result.Problems.Add(new CardCodeProblem(code, $"{card.Code}: {reason}.", false));
+                    continue;
+                }
+
+                var lines = GetWinningLines(card.Index, drawnList);
+                if (lines.Count == 0)
+                {
+                    var (missing, nums) = BestLine(card.Index, drawnList);
+                    result.Problems.Add(new CardCodeProblem(code,
+                        $"{card.Code}: chưa Bingo, đường gần nhất còn thiếu {missing} số ({string.Join(", ", nums.Select(n => n.ToString("D2")))}).", true));
+                    continue;
+                }
+
+                result.Accepted.Add(new CardCodeAccepted(card, lines));
+            }
+            return result;
         }
 
         // ---------- Sao lưu / khôi phục bộ thẻ ----------

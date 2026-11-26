@@ -13,6 +13,10 @@
                         <tr>
                             <th width="60" class="text-center">Chọn</th>
                             <th>STT</th>
+                            @if (HasLabels)
+                            {
+                                <th>Thẻ · Người chơi</th>
+                            }
                             <th>Dãy Số Trúng</th> @* Cột này sẽ được tối ưu để chứa số ngang *@
                         </tr>
                     </thead>
@@ -32,6 +36,10 @@
                                            style="transform: scale(1.2);" />
                                 </td>
                                 <td>@(index + 1)</td>
+                                @if (HasLabels)
+                                {
+                                    <td class="small">@Labels![index]</td>
+                                }
 
                                 @* Thêm style để đảm bảo nội dung không bị ngắt dòng *@
                                 @* Thay thế bằng thẻ TD này *@
@@ -160,6 +168,12 @@
 @code {
     [Parameter] public bool IsVisible { get; set; }
     [Parameter] public List<string> CandidatesDisplay { get; set; }
+
+    /// <summary>Nhãn từng ứng viên (mã thẻ · người chơi · đường trúng), cùng thứ tự với CandidatesDisplay. Bỏ trống nếu không dùng thẻ.</summary>
+    [Parameter] public List<string>? Labels { get; set; }
+
+    private bool HasLabels =>
+        Labels != null && Labels.Count == CandidatesDisplay.Count && Labels.Any(l => !string.IsNullOrEmpty(l));
     [Parameter] public EventCallback<int> OnConfirmSingle { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }
 
