@@ -1,3 +1,5 @@
+@implements IDisposable
+
 @if (IsVisible && _draft != null)
 {
     <div class="settings-overlay">
@@ -27,7 +29,7 @@
                     <div class="col-6 col-md-3">
                         <label class="form-label">Tổng số bóng</label>
                         <input type="number" class="form-control" min="20" max="99"
-                               @bind="_draft.TotalNumbers" disabled="@TotalLocked" />
+                               @bind="_draft.TotalNumbers" disabled="@(TotalLocked || CardsLocked)" />
                     </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label">Số trúng tối thiểu</label>
@@ -46,6 +48,10 @@
                 {
                     <div class="form-text mb-2">Không đổi được "Tổng số bóng" khi ván đang chơi. Hãy bấm "Ván mới" trước.</div>
                 }
+                else if (CardsLocked)
+                {
+                    <div class="form-text mb-2">Không đổi được "Tổng số bóng" vì bộ thẻ đã phát hành (xem mục Thẻ Bingo bên dưới).</div>
+                }
 
                 @* ============ MÀU BÓNG ============ *@
                 <h5 class="settings-section">Màu bóng</h5>
@@ -63,20 +69,30 @@
 
                 @* ============ THẺ BINGO ============ *@
                 <h5 class="settings-section">Thẻ Bingo (in 8 thẻ / tờ A4)</h5>
+
+                @if (CardsLocked)
+                {
+                    <div class="alert alert-warning py-2 mb-2">
+                        🔒 <strong>Bộ thẻ đã phát hành</strong>@(Cards.IssuedAt != null ? $" ({Cards.IssuedAt})" : "")
+                        — @Cards.Count thẻ. Các thẻ đã in được giữ nguyên: bạn chỉ có thể <strong>tăng số người</strong>
+                        (thẻ mới nối thêm phía sau). Muốn đổi số thẻ / số bóng, hãy bấm "Tạo bộ thẻ mới".
+                    </div>
+                }
+
                 <div class="row g-2 mb-2">
                     <div class="col-6 col-md-4">
                         <label class="form-label">Số người tham gia</label>
-                        <input type="number" class="form-control" min="0" max="@CardService.MaxParticipants"
+                        <input type="number" class="form-control" min="@(CardsLocked ? Cards.Count / Math.Max(1, Cards.SetPerPerson) : 0)" max="@CardService.MaxParticipants"
                                @bind="_draft.Participants" @bind:event="oninput" />
                     </div>
                     <div class="col-6 col-md-4">
                         <label class="form-label">Thẻ / người</label>
-                        <input type="number" class="form-control" min="1" max="10"
+                        <input type="number" class="form-control" min="1" max="10" disabled="@CardsLocked"
                                @bind="_draft.CardsPerPerson" @bind:event="oninput" />
                     </div>
                     <div class="col-6 col-md-4">
                         <label class="form-label">Số bóng / thẻ</label>
-                        <input type="number" class="form-control" min="1" max="15"
+                        <input type="number" class="form-control" min="1" max="15" disabled="@CardsLocked"
                                @bind="_draft.NumbersPerCard" @bind:event="oninput" />
                     </div>
                 </div>
@@ -85,10 +101,78 @@
                     · Số tờ A4: <strong>@((_draft.CardsIssued + CardService.CardsPerSheet - 1) / CardService.CardsPerSheet)</strong>.
                     Thẻ trúng khi <strong>tất cả</strong> số trên thẻ đã được quay. Đặt số người = 0 để không dùng thẻ.
                 </div>
-                @if (TotalLocked && Cards.HasCards)
+
+                @* ---- Xem trước ---- *@
+                @if (_draft.CardsIssued > 0)
                 {
-                    <div class="form-text mb-2 text-danger">Đổi số người / thẻ / số bóng sẽ tạo lại toàn bộ thẻ (thẻ đã in không còn dùng được).</div>
+                    var preview = Cards.Preview(_draft, _previewCount);
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                        <strong>Xem trước thẻ</strong>
+                        <span class="text-muted small">(@preview.Count / @_draft.CardsIssued thẻ đầu tiên)</span>
+                        @if (!CardsLocked)
+                        {
+                            <button type="button" class="btn btn-outline-secondary btn-sm ms-auto" @onclick="Reshuffle">🎲 Bộ số khác</button>
+                        }
+                    </div>
+                    <div class="pv-grid">
+                        @foreach (var c in preview)
+                        {
+                            <div class="pv-card">
+                                <div class="pv-head"><span class="pv-title">@_draft.Title</span><span class="pv-code">@c.Code</span></div>
+                                <div class="pv-who">@c.Who</div>
+                                <div class="pv-nums" style="@AppSettings.BuildBallVars(_draft.BallColor)">
+                                    @foreach (var n in c.Numbers)
+                                    {
+                                        <span class="pv-ball">@n.ToString("00")</span>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    @if (_previewCount < Math.Min(_draft.CardsIssued, 24))
+                    {
+                        <button type="button" class="btn btn-link btn-sm p-0 mb-2" @onclick="() => _previewCount += 4">Xem thêm</button>
+                    }
+                    @if (!CardsLocked)
+                    {
+                        <div class="form-text mb-2">Thẻ hiển thị ở đây chính là thẻ sẽ được tạo khi bấm Lưu. Sau khi in, bộ thẻ tự khóa.</div>
+                    }
                 }
+
+                @* ---- In / khóa / sao lưu ---- *@
+                <div class="card-tools">
+                    @if (Cards.HasCards)
+                    {
+                        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                            <span class="small">In từ thẻ</span>
+                            <input type="number" class="form-control form-control-sm" style="width:84px" min="1" max="@Cards.Count" @bind="_printFrom" />
+                            <span class="small">đến</span>
+                            <input type="number" class="form-control form-control-sm" style="width:84px" min="1" max="@Cards.Count" @bind="_printTo" />
+                            <button type="button" class="btn btn-success btn-sm" disabled="@(!CardsSaved)" @onclick="PrintCards">🖨️ In thẻ</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => { _printFrom = 1; _printTo = Cards.Count; }">Tất cả</button>
+                        </div>
+                        @if (!CardsSaved)
+                        {
+                            <div class="form-text text-danger mb-2">Thiết lập thẻ đã đổi: bấm 💾 Lưu rồi mới in.</div>
+                        }
+                        <div class="d-flex flex-wrap gap-2 mb-2">
+                            @if (!Cards.Issued)
+                            {
+                                <button type="button" class="btn btn-outline-warning btn-sm" disabled="@(!CardsSaved)" @onclick="LockCards">🔒 Khóa bộ thẻ</button>
+                            }
+                            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="ExportCards">⬇ Sao lưu bộ thẻ</button>
+                            @if (Cards.Issued)
+                            {
+                                <button type="button" class="btn btn-outline-danger btn-sm" @onclick="DiscardCards">🗑 Tạo bộ thẻ mới</button>
+                            }
+                        </div>
+                    }
+                    <label class="btn btn-outline-secondary btn-sm mb-2">
+                        ⬆ Khôi phục bộ thẻ từ file
+                        <input type="file" accept=".json,application/json" hidden id="settings-cards-import" @onchange="ImportCards" />
+                    </label>
+                    <div class="form-text mb-2">Nên sao lưu bộ thẻ sau khi in: dữ liệu thẻ chỉ lưu trong trình duyệt này.</div>
+                </div>
 
                 @* ============ HÌNH NỀN ============ *@
                 <h5 class="settings-section">Hình nền</h5>
@@ -185,6 +269,25 @@
     private string? _error;
     private bool _wasVisible;
 
+    private int _previewCount = 4;
+    private int _printFrom = 1;
+    private int _printTo = 1;
+
+    /// <summary>Bộ thẻ đã phát hành (in/khóa) → không cho đổi thông số làm hỏng thẻ đã in.</summary>
+    private bool CardsLocked => Cards.HasCards && Cards.Issued;
+
+    /// <summary>Thiết lập thẻ đang chỉnh đã khớp với bộ thẻ đã lưu (mới được in).</summary>
+    private bool CardsSaved => _draft != null && Cards.HasCards
+        && _draft.TotalNumbers == Cards.SetTotal
+        && _draft.NumbersPerCard == Cards.SetNumbersPerCard
+        && _draft.CardsIssued == Cards.Count;
+
+    protected override void OnInitialized() => Cards.OnChange += HandleCardsChanged;
+
+    public void Dispose() => Cards.OnChange -= HandleCardsChanged;
+
+    private void HandleCardsChanged() => InvokeAsync(StateHasChanged);
+
     protected override void OnParametersSet()
     {
         // Mỗi lần mở popup: làm việc trên bản sao, chỉ áp dụng khi bấm Lưu
@@ -192,8 +295,62 @@
         {
             _draft = SettingsService.Clone(Settings.Current);
             _error = null;
+            _previewCount = 4;
+            _printFrom = 1;
+            _printTo = Math.Max(1, Cards.Count);
+            Cards.ResetPending();
         }
         _wasVisible = IsVisible;
+    }
+
+    private void Reshuffle() => Cards.ReshufflePending();
+
+    private async Task PrintCards()
+    {
+        if (_draft == null || !CardsSaved) return;
+        int from = Math.Clamp(_printFrom, 1, Cards.Count);
+        int to = Math.Clamp(_printTo, from, Cards.Count);
+        await Cards.PrintAsync(Settings.Current, from, to); // in xong tự khóa bộ thẻ
+    }
+
+    private async Task LockCards() => await Cards.LockAsync();
+
+    private async Task DiscardCards()
+    {
+        var ok = await JSRuntime.InvokeAsync<bool>("confirm",
+            "Tạo bộ thẻ mới?\nBộ thẻ hiện tại (đã phát hành) sẽ bị XÓA. Các thẻ đã in sẽ không còn dùng được.");
+        if (!ok) return;
+        await Cards.DiscardAsync();
+        _error = null;
+    }
+
+    private async Task ExportCards()
+    {
+        var json = Cards.ExportJson();
+        if (json == null) return;
+        var dataUrl = "data:application/json;charset=utf-8," + Uri.EscapeDataString(json);
+        await JSRuntime.InvokeVoidAsync("SaveFile", $"bingo-cards-{DateTime.Now:yyyyMMdd-HHmm}.json", dataUrl);
+    }
+
+    private async Task ImportCards()
+    {
+        var text = await JSRuntime.InvokeAsync<string?>("SettingsHelper.readText", "settings-cards-import");
+        if (text == null) return;
+
+        if (Cards.HasCards)
+        {
+            var ok = await JSRuntime.InvokeAsync<bool>("confirm",
+                "Khôi phục bộ thẻ từ file sẽ THAY THẾ bộ thẻ hiện tại. Tiếp tục?");
+            if (!ok) return;
+        }
+
+        var err = await Cards.ImportAsync(text);
+        if (err != null) { _error = err; return; }
+
+        _draft = SettingsService.Clone(Settings.Current);
+        _printFrom = 1;
+        _printTo = Cards.Count;
+        _error = null;
     }
 
     private async Task Cancel() => await OnClose.InvokeAsync();
@@ -234,6 +391,13 @@
             var maxCards = CardService.MaxUniqueCards(s.TotalNumbers, s.NumbersPerCard);
             if (s.CardsIssued > maxCards)
                 return $"Chỉ tạo được tối đa {maxCards:N0} thẻ khác nhau với {s.NumbersPerCard} bóng / {s.TotalNumbers} số.";
+        }
+        if (CardsLocked)
+        {
+            if (s.TotalNumbers != Cards.SetTotal || s.NumbersPerCard != Cards.SetNumbersPerCard || s.CardsPerPerson != Cards.SetPerPerson)
+                return "Bộ thẻ đã phát hành: không đổi được Tổng số bóng, Số bóng / thẻ, Thẻ / người. Bấm \"Tạo bộ thẻ mới\" nếu muốn đổi.";
+            if (s.CardsIssued < Cards.Count)
+                return $"Bộ thẻ đã phát hành ({Cards.Count} thẻ): không được giảm số người. Bấm \"Tạo bộ thẻ mới\" nếu muốn làm lại.";
         }
         if (s.ConfettiSeconds < 1 || s.ConfettiSeconds > 60) return "Thời gian pháo hoa phải từ 1 đến 60 giây.";
         if (s.Rewards.Count == 0) return "Cần ít nhất 1 giải thưởng.";

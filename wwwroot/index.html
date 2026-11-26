@@ -7,7 +7,8 @@
     <title>Bingo20Y</title>
     <base href="/">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
-    <link rel="stylesheet" href="css/app.css" />
+    <link rel="icon" href="icon-192.png" />
+    <link rel="stylesheet" href="css/app.css?v=20261126" />
     <!-- If you add any scoped CSS files, uncomment the following to load them
     <link href="Bingo.styles.css" rel="stylesheet" /> -->
 </head>
@@ -38,9 +39,31 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.js"></script>
-    <script src="js/bingoCapture.js"></script>
-    <script src="js/utils.js"></script>
-    <script src="js/settings.js"></script>
+    <script src="js/bingoCapture.js?v=20261126"></script>
+    <script src="js/utils.js?v=20261126"></script>
+    <script src="js/settings.js?v=20261126"></script>
+    <script>
+        // Dự phòng: nếu trình duyệt còn giữ bản bingoCapture.js cũ (thiếu flyTo) thì vẫn không bị lỗi.
+        window.AnimationHelper = window.AnimationHelper || {};
+        if (!window.AnimationHelper.getClickPosition) {
+            window.AnimationHelper.getClickPosition = function (id) {
+                var el = document.getElementById(id);
+                if (!el) return null;
+                var r = el.getBoundingClientRect();
+                return { top: r.top, left: r.left, width: r.width, height: r.height };
+            };
+        }
+        if (!window.AnimationHelper.flyTo) {
+            window.AnimationHelper.flyTo = function (id, dx, dy) {
+                var el = document.getElementById(id);
+                if (!el) return;
+                requestAnimationFrame(function () { requestAnimationFrame(function () {
+                    el.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) scale(1.77)';
+                    el.style.opacity = '0.5';
+                }); });
+            };
+        }
+    </script>
 </body>
 
 </html>

@@ -10,7 +10,7 @@
         <div @key="i"
              id="@($"ball-{fixedNumber}")" 
              @onclick="() => HandleClick(fixedNumber)" 
-             class="@(isUnavailable ? "number-circle drawn" : "number-circle")">
+             class="@(isUnavailable ? "number-circle drawn" : (PreviewNumber == fixedNumber ? "number-circle preview" : "number-circle"))">
             @fixedNumber.ToString("00")
         </div>
     }
@@ -27,6 +27,10 @@
 
     [Parameter] // 💥 Thêm tham số này 💥
     public List<int> CurrentSelectedNumbers { get; set; } = new List<int>();
+
+    /// <summary>Số đang gõ ở ô nhập nhanh: bóng tương ứng được làm nổi bật.</summary>
+    [Parameter]
+    public int? PreviewNumber { get; set; }
 
     private async Task HandleClick(int number)
     {
@@ -84,6 +88,18 @@
         .number-circle:hover:not(.drawn) {
             filter: brightness(0.85);
             transform: scale(1.05);
+        }
+
+        .number-circle.preview {
+            transform: scale(1.35);
+            box-shadow: 0 0 0 4px #ffc107, 0 0 18px 6px rgba(255, 193, 7, 0.85);
+            z-index: 5;
+            animation: qd-pulse 0.7s ease-in-out infinite alternate;
+        }
+
+        @@keyframes qd-pulse {
+            from { filter: brightness(1); }
+            to { filter: brightness(1.25); }
         }
 
         .number-circle.drawn {

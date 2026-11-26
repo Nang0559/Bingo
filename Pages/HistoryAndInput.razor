@@ -2,23 +2,60 @@
 
 <div class="history-input-wrapper">
 
-    <h4>Chọn Ảnh Quay Thưởng</h4>
-    <div class="reward-image-container">
+    @* ============ 1. CHỌN GIẢI ============ *@
+    <div class="rw-title">
+        <span class="rw-step">1</span> Chọn giải thưởng
+        <span class="rw-progress-text">Đã trao @UsedCount/@RewardImages.Count</span>
+    </div>
+    <div class="rw-progress"><div class="rw-progress-bar" style="width:@ProgressPercent%"></div></div>
+
+    <div class="reward-grid">
         @foreach (var image in RewardImages)
         {
-            <img src="@image.ImagePath"
-                 @onclick="() => SelectImage(image)"
-                 class="@(image.IsUsed ? "reward-image used" : (image.IsSelected ? "reward-image selected" : "reward-image"))"
-                 title="@image.Name"
-                 alt="@image.Name" />
+            var img = image;
+            <button type="button"
+                    class="reward-tile @(img.IsUsed ? "used" : (img.IsSelected ? "selected" : ""))"
+                    disabled="@img.IsUsed"
+                    @onclick="() => SelectImage(img)"
+                    title="@img.Name">
+                <span class="reward-thumb"><img src="@img.ImagePath" alt="@img.Name" /></span>
+                <span class="reward-name">@img.Name</span>
+                @if (img.IsUsed)
+                {
+                    <span class="reward-badge done">✓ Đã trao</span>
+                    @if (!string.IsNullOrEmpty(img.WinnerLabel))
+                    {
+                        <span class="reward-winner">@img.WinnerLabel</span>
+                    }
+                }
+                else if (img.IsSelected)
+                {
+                    <span class="reward-badge now">● Đang chọn</span>
+                }
+            </button>
         }
     </div>
 
-    <h4>Nhập Dãy Số Phụ (@WinCountText, cách nhau bằng dấu ',' hoặc khoảng trắng)</h4>
+    @* ============ 2. NHẬP DÃY SỐ TRÚNG ============ *@
+    <div class="rw-title">
+        <span class="rw-step">2</span> Nhập dãy số trên thẻ trúng
+    </div>
+    <div class="rw-hint">
+        @if (SelectedReward != null)
+        {
+            <span>Đang trao: <strong>@SelectedReward.Name</strong></span>
+        }
+        else
+        {
+            <span class="text-danger">Hãy chọn một giải ở trên trước.</span>
+        }
+        · Cần @WinCountText, cách nhau bằng ',' hoặc khoảng trắng@(Cards.HasCards ? ", hoặc gõ mã thẻ (vd #42)" : "")
+    </div>
 
     <div class="input-group mb-3">
         <input type="text" @bind="InputNumbers" class="form-control"
-               placeholder="Ví dụ: 01, 05, 12, 20..." @onkeyup="@EnterKeyHandler" />
+               placeholder="@(Cards.HasCards ? "01, 05, 12, 20... hoặc #42" : "Ví dụ: 01, 05, 12, 20...")"
+               @onkeyup="@EnterKeyHandler" />
 
         <button class="btn btn-primary" @onclick="CheckAndAddWinner"
                 disabled="@(SelectedReward == null)">
@@ -26,7 +63,6 @@
         </button>
     </div>
 
-    @* --- 1. GIỮ NGUYÊN HIỂN THỊ DANH SÁCH TRÊN MÀN HÌNH --- *@
     @if (_tempSessionWinnersDisplay.Any())
     {
         <div class="pending-winners-area">
@@ -36,8 +72,15 @@
                 {
                     var item = _tempSessionWinnersDisplay[i];
                     var key = _tempSessionWinners[i];
+                    var label = i < _tempSessionWinnerLabels.Count ? _tempSessionWinnerLabels[i] : "";
                     <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <span><strong>Vé @(i + 1):</strong> @item</span>
+                        <span>
+                            <strong>Vé @(i + 1):</strong> @item
+                            @if (!string.IsNullOrEmpty(label))
+                            {
+                                <span class="card-chip">@label</span>
+                            }
+                        </span>
                         <button class="btn btn-sm btn-outline-danger"
                                 @onclick="() => RemoveTempWinner(key, item)">
                             Xóa
@@ -48,7 +91,7 @@
         </div>
     }
 
-    @* --- 2. NÚT MỞ POPUP DANH SÁCH (ĐỂ CHECKBOX) --- *@
+    @* ============ 3. TRAO GIẢI ============ *@
     <button class="btn btn-warning w-100 mb-4 fw-bold"
             @onclick="() => isCandidatePopupVisible = true"
             disabled="@(!_tempSessionWinners.Any() || SelectedReward == null)">
@@ -98,35 +141,34 @@
 
 <style>
     /* Giữ nguyên CSS cũ của bạn */
-    .reward-image-container {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        justify-content: space-around;
-        margin-bottom: 20px;
-    }
+    .rw-title { display:flex; align-items:center; gap:8px; font-weight:700; margin:10px 0 6px; }
+    .rw-step { width:24px; height:24px; border-radius:50%; background:#0d6efd; color:#fff; font-size:.85rem;
+               display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .rw-progress-text { margin-left:auto; font-size:.8rem; font-weight:600; color:#6c757d; }
+    .rw-progress { height:6px; background:#e9ecef; border-radius:3px; overflow:hidden; margin-bottom:10px; }
+    .rw-progress-bar { height:100%; background:linear-gradient(90deg,#20c997,#198754); transition:width .4s ease; }
+    .rw-hint { font-size:.85rem; color:#555; margin-bottom:6px; }
 
-    .reward-image {
-        width: 60px;
-        height: 60px;
-        border: 2px solid transparent;
-        cursor: pointer;
-        transition: all 0.2s ease;
-    }
+    .reward-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(104px,1fr)); gap:10px; margin-bottom:16px; }
+    .reward-tile { position:relative; display:flex; flex-direction:column; align-items:center; gap:4px;
+                   padding:8px 6px 10px; background:#fff; border:2px solid #e3e6ea; border-radius:12px; cursor:pointer;
+                   transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+    .reward-tile:hover:not(:disabled) { transform:translateY(-3px); box-shadow:0 6px 14px rgba(0,0,0,.15); border-color:#9ec5fe; }
+    .reward-thumb { width:100%; height:72px; display:flex; align-items:center; justify-content:center; }
+    .reward-thumb img { max-width:100%; max-height:72px; object-fit:contain; }
+    .reward-name { font-size:.8rem; font-weight:700; text-align:center; line-height:1.15; }
+    .reward-badge { font-size:.68rem; font-weight:700; padding:1px 8px; border-radius:20px; }
+    .reward-badge.now { background:#fff3cd; color:#8a6d00; }
+    .reward-badge.done { background:#d1e7dd; color:#0f5132; }
+    .reward-winner { font-size:.68rem; color:#555; text-align:center; word-break:break-word; }
+    .reward-tile.selected { border-color:#ffc107; background:linear-gradient(180deg,#fffdf2,#fff3cd);
+                            box-shadow:0 0 0 3px rgba(255,193,7,.35), 0 6px 16px rgba(255,193,7,.45); transform:translateY(-2px); }
+    .reward-tile.used { cursor:not-allowed; background:#f4f6f8; border-style:dashed; }
+    .reward-tile.used .reward-thumb img { filter:grayscale(1); opacity:.45; }
+    .reward-tile.used .reward-name { color:#6c757d; }
 
-        .reward-image:hover:not(.used) {
-            transform: scale(1.1);
-        }
-
-        .reward-image.used {
-            opacity: 0.3;
-            cursor: not-allowed;
-        }
-
-        .reward-image.selected {
-            border-color: #ffc107;
-            box-shadow: 0 0 10px rgba(255, 193, 7, 0.5);
-        }
+    .card-chip { display:inline-block; margin-left:6px; padding:1px 8px; font-size:.72rem; font-weight:700;
+                 background:#e7f1ff; color:#0a58ca; border-radius:20px; }
 
     .captured-images-list {
         display: flex;
@@ -169,6 +211,7 @@
     private HashSet<string> UsedWinningCombinations { get; set; } = new HashSet<string>();
     private List<string> _tempSessionWinners = new List<string>(); // Key
     private List<string> _tempSessionWinnersDisplay = new List<string>(); // Display
+    private List<string> _tempSessionWinnerLabels = new List<string>(); // Nhãn thẻ: "#0042 · Người chơi 0021"
 
     // Xử lý vé được chọn
     private int _processingIndex = -1;
@@ -182,10 +225,15 @@
         public string ImagePath { get; set; } = "";
         public bool IsUsed { get; set; }
         public bool IsSelected { get; set; }
+        /// <summary>Hiển thị trên ô giải đã trao: thẻ / dãy số đã trúng giải này.</summary>
+        public string WinnerLabel { get; set; } = "";
     }
 
     // Danh sách giải thưởng lấy từ Cài đặt
     private List<RewardImage> RewardImages = new();
+
+    private int UsedCount => RewardImages.Count(r => r.IsUsed);
+    private int ProgressPercent => RewardImages.Count == 0 ? 0 : UsedCount * 100 / RewardImages.Count;
 
     private string WinCountText => Settings.Current.MinWinCount == Settings.Current.MaxWinCount
         ? $"{Settings.Current.MinWinCount} số"
@@ -232,12 +280,13 @@
     // Gọi từ Home khi bắt đầu ván mới
     public void ResetState()
     {
-        foreach (var r in RewardImages) { r.IsUsed = false; r.IsSelected = false; }
+        foreach (var r in RewardImages) { r.IsUsed = false; r.IsSelected = false; r.WinnerLabel = ""; }
         SelectedReward = null;
         UsedWinningCombinations.Clear();
         Cards.ClearAwarded();
         _tempSessionWinners.Clear();
         _tempSessionWinnersDisplay.Clear();
+        _tempSessionWinnerLabels.Clear();
         _currentFinalNumbers.Clear();
         _processingIndex = -1;
         InputNumbers = "";
@@ -266,6 +315,16 @@
         var inputNumberStrings = InputNumbers
             .Split(new[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .ToList();
+
+        // Gõ mã thẻ (vd "#42") → lấy dãy số của đúng thẻ đã phát hành đó
+        if (inputNumberStrings.Count == 1 && inputNumberStrings[0].StartsWith('#'))
+        {
+            if (!int.TryParse(inputNumberStrings[0].AsSpan(1), out int code) || !Cards.TryGetByCode(code, out var byCode) || byCode == null)
+            {
+                JSRuntime.InvokeVoidAsync("showCustomError", "Không có thẻ với mã này trong bộ thẻ đã phát hành."); return;
+            }
+            inputNumberStrings = byCode.Numbers.Select(n => n.ToString()).ToList();
+        }
         foreach (var s in inputNumberStrings) { if (int.TryParse(s, out int n)) parsedValidNumbers.Add(n); }
 
         bool hasRequiredCount = parsedValidNumbers.Count >= Settings.Current.MinWinCount && parsedValidNumbers.Count <= Settings.Current.MaxWinCount;
@@ -277,10 +336,28 @@
 
         if (!isWinner)
         {
-            JSRuntime.InvokeVoidAsync("showCustomError", $"Dãy số không hợp lệ hoặc không trúng thưởng. (Cần {WinCountText}, tất cả đều đã quay.)"); return;
+            string msg = $"Dãy số không hợp lệ hoặc không trúng thưởng. (Cần {WinCountText}, tất cả đều đã quay.)";
+            if (hasRequiredCount && allInputsValid && isDistinct)
+            {
+                var missing = parsedValidNumbers.Where(n => !CurrentSelectedNumbers.Contains(n)).OrderBy(n => n).ToList();
+                if (missing.Count > 0)
+                    msg += $"\nSố chưa quay: {string.Join(", ", missing.Select(n => n.ToString("D2")))}.";
+            }
+            JSRuntime.InvokeVoidAsync("showCustomError", msg); return;
         }
 
         string winningKey = string.Join("-", parsedValidNumbers.OrderBy(n => n));
+
+        // Có bộ thẻ phát hành: dãy số phải đúng là MỘT THẺ ĐÃ PHÁT HÀNH
+        string cardLabel = "";
+        if (Cards.HasCards)
+        {
+            if (!Cards.TryFind(winningKey, out var issuedCard) || issuedCard == null)
+            {
+                JSRuntime.InvokeVoidAsync("showCustomError", "Dãy số này không thuộc bộ thẻ đã phát hành."); return;
+            }
+            cardLabel = $"{issuedCard.Code} · {issuedCard.Who}";
+        }
         if (UsedWinningCombinations.Contains(winningKey))
         {
             JSRuntime.InvokeVoidAsync("showCustomError", "Bộ số này ĐÃ ĐƯỢC trao thưởng trước đó."); return;
@@ -293,6 +370,7 @@
         _tempSessionWinners.Add(winningKey);
         string display = string.Join(", ", parsedValidNumbers.OrderBy(n => n).Select(n => n.ToString("D2")));
         _tempSessionWinnersDisplay.Add(display);
+        _tempSessionWinnerLabels.Add(cardLabel);
         InputNumbers = "";
         StateHasChanged();
     }
@@ -300,7 +378,13 @@
     private void RemoveTempWinner(string key, string item)
     {
         int idx = _tempSessionWinners.IndexOf(key);
-        if (idx >= 0) { _tempSessionWinners.RemoveAt(idx); _tempSessionWinnersDisplay.RemoveAt(idx); StateHasChanged(); }
+        if (idx >= 0)
+        {
+            _tempSessionWinners.RemoveAt(idx);
+            _tempSessionWinnersDisplay.RemoveAt(idx);
+            if (idx < _tempSessionWinnerLabels.Count) _tempSessionWinnerLabels.RemoveAt(idx);
+            StateHasChanged();
+        }
     }
 
     // --- LOGIC 2: XỬ LÝ SAU KHI CHỌN TỪ POPUP TRUNG GIAN ---
@@ -331,6 +415,7 @@
         if (_processingIndex >= 0 && _processingIndex < _tempSessionWinners.Count && SelectedReward != null)
         {
             string winnerKey = _tempSessionWinners[_processingIndex];
+            string winnerLabel = _processingIndex < _tempSessionWinnerLabels.Count ? _tempSessionWinnerLabels[_processingIndex] : "";
             UsedWinningCombinations.Add(winnerKey);
             Cards.MarkAwarded(winnerKey); // thẻ đã trao thưởng không còn tính vào thống kê
 
@@ -347,11 +432,13 @@
             // _processingIndex = -1;
             _tempSessionWinners.Clear();
             _tempSessionWinnersDisplay.Clear();
+            _tempSessionWinnerLabels.Clear();
             _processingIndex = -1; // Reset index xử lý
             // 3. KIỂM TRA ĐIỀU KIỆN KHOÁ ẢNH: Chỉ khóa khi danh sách tạm rỗng
 
             // --- THỰC HIỆN "KHOÁ ẢNH" ---
             SelectedReward.IsUsed = true;
+            SelectedReward.WinnerLabel = string.IsNullOrEmpty(winnerLabel) ? winnerKey : winnerLabel;
             SelectedReward.IsSelected = false;
             SelectedReward = null;
         }

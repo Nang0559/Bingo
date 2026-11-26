@@ -1,0 +1,116 @@
+@* Ô nhập số quay thủ công: gõ số rồi Enter là bóng bay lên màn hình, không cần click số ở bảng.
+   Có thể gõ nhiều số một lúc (cách nhau bằng dấu phẩy / khoảng trắng): các số sẽ lần lượt bay lên. *@
+<div class="quick-draw @(_shake ? "shake" : "")">
+    <span class="qd-icon">🎯</span>
+    <input @ref="_input"
+           type="text"
+           inputmode="numeric"
+           autocomplete="off"
+           class="qd-input"
+           placeholder="Gõ số rồi Enter"
+           maxlength="40"
+           value="@_text"
+           @oninput="OnInput"
+           @onkeydown="OnKeyDown" />
+    <button type="button" class="qd-btn" @onclick="SubmitAsync" disabled="@string.IsNullOrWhiteSpace(_text)">Quay ⏎</button>
+    @if (_message != null)
+    {
+        <span class="qd-msg @(_isError ? "err" : "ok")">@_message</span>
+    }
+</div>
+
+@code {
+    /// <summary>Trả về null nếu nhận số thành công, hoặc thông báo lỗi.</summary>
+    [Parameter] public Func<IReadOnlyList<int>, Task<string?>>? OnSubmit { get; set; }
+
+    /// <summary>Số đang gõ (null nếu chưa gõ / không hợp lệ) — để bảng số làm nổi bóng tương ứng.</summary>
+    [Parameter] public EventCallback<int?> OnPreview { get; set; }
+
+    private ElementReference _input;
+    private string _text = "";
+    private string? _message;
+    private bool _isError;
+    private bool _shake;
+    private int _msgVersion;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try { await _input.FocusAsync(); } catch { }
+        }
+    }
+
+    private async Task OnInput(ChangeEventArgs e)
+    {
+        _text = e.Value?.ToString() ?? "";
+        _message = null;
+        var tokens = Tokenize(_text);
+        int? preview = tokens.Count == 1 && int.TryParse(tokens[0], out var n) ? n : null;
+        await OnPreview.InvokeAsync(preview);
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await SubmitAsync();
+        else if (e.Key == "Escape")
+        {
+            _text = "";
+            _message = null;
+            await OnPreview.InvokeAsync(null);
+        }
+    }
+
+    private static List<string> Tokenize(string text) =>
+        text.Split(new[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
+    private async Task SubmitAsync()
+    {
+        var tokens = Tokenize(_text);
+        if (tokens.Count == 0) return;
+
+        var numbers = new List<int>();
+        foreach (var t in tokens)
+        {
+            if (!int.TryParse(t, out var n)) { await ShowAsync($"\"{t}\" không phải là số", true); return; }
+            numbers.Add(n);
+        }
+
+        string? error = OnSubmit == null ? null : await OnSubmit(numbers);
+        if (error != null)
+        {
+            await ShowAsync(error, true);
+            return;
+        }
+
+        var shown = string.Join(", ", numbers.Distinct().Select(n => n.ToString("00")));
+        _text = "";
+        await OnPreview.InvokeAsync(null);
+        await ShowAsync($"✓ {shown}", false);
+        try { await _input.FocusAsync(); } catch { }
+    }
+
+    private async Task ShowAsync(string message, bool isError)
+    {
+        _message = message;
+        _isError = isError;
+        int version = ++_msgVersion;
+        if (isError)
+        {
+            _shake = true;
+            StateHasChanged();
+            await Task.Delay(400);
+            _shake = false;
+        }
+        StateHasChanged();
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(isError ? 3500 : 1500);
+            if (version == _msgVersion)
+            {
+                _message = null;
+                await InvokeAsync(StateHasChanged);
+            }
+        });
+    }
+}

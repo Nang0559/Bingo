@@ -15,27 +15,6 @@
             <div class="game-toolbar">
                 <span class="game-title">@Settings.Current.Title</span>
                 <span class="game-counter">Đã quay: @CurrentSelectedNumbers.Count/@TotalNumbers</span>
-                <button class="btn btn-primary btn-sm"
-                        @onclick="DrawRandom"
-                        disabled="@(FlyingBallData != null)">
-                    🎲 Quay ngẫu nhiên
-                </button>
-                <button class="btn btn-outline-danger btn-sm"
-                        @onclick="ResetGame"
-                        disabled="@(FlyingBallData != null)">
-                    ↺ Ván mới
-                </button>
-                <button class="btn btn-outline-secondary btn-sm"
-                        @onclick="() => showSettings = true"
-                        disabled="@(FlyingBallData != null)">
-                    ⚙️ Cài đặt
-                </button>
-                @if (Cards.HasCards)
-                {
-                    <button class="btn btn-outline-success btn-sm" @onclick="PrintCards">
-                        🖨️ In thẻ (@Cards.Count thẻ · @Cards.Sheets tờ A4)
-                    </button>
-                }
             </div>
 
             <div id="flying-target-anchor" class="flying-anchor-point"></div>
@@ -69,6 +48,31 @@
         }
 
         <div class="history-area">
+            <div class="control-panel">
+                <QuickDrawInput OnSubmit="DrawManual" OnPreview="OnQuickPreview" />
+                <button class="btn btn-primary btn-sm"
+                        @onclick="DrawRandom"
+                        disabled="@(FlyingBallData != null)">
+                    🎲 Quay ngẫu nhiên
+                </button>
+                <button class="btn btn-outline-danger btn-sm"
+                        @onclick="ResetGame"
+                        disabled="@(FlyingBallData != null)">
+                    ↺ Ván mới
+                </button>
+                <button class="btn btn-outline-secondary btn-sm"
+                        @onclick="() => showSettings = true"
+                        disabled="@(FlyingBallData != null)">
+                    ⚙️ Cài đặt
+                </button>
+                @if (Cards.HasCards)
+                {
+                    <button class="btn btn-outline-success btn-sm" @onclick="PrintCards">
+                        🖨️ In thẻ (@Cards.Count thẻ · @Cards.Sheets tờ A4)
+                    </button>
+                }
+            </div>
+
             <HistoryAndInput @ref="historyPanel"
                              DrawnNumbers="DrawnNumbers"
                              CurrentSelectedNumbers="@CurrentSelectedNumbers"
@@ -79,6 +83,7 @@
 
     <div class="bottom-area">
         <NumberPanel OnNumberSelectedWithCoords="HandleNumberSelection"
+                     PreviewNumber="_previewNumber"
                      DrawnNumbers="DrawnNumbers"
                      CurrentSelectedNumbers="CurrentSelectedNumbers" />
     </div>
@@ -108,9 +113,8 @@
 
     private async Task PrintCards()
     {
-        var html = Cards.BuildPrintHtml(Settings.Current);
-        if (string.IsNullOrEmpty(html)) return;
-        await JSRuntime.InvokeVoidAsync("SettingsHelper.printHtml", html);
+        // In xong bộ thẻ tự được khóa (không bị tạo lại khi đổi thiết lập)
+        await Cards.PrintAsync(Settings.Current);
     }
 
     private List<int> CurrentSelectedNumbers { get; set; } = new();
@@ -121,6 +125,57 @@
     private BallFlyData? FlyingBallData { get; set; }
 
     private HistoryAndInput? historyPanel;
+
+    // ----- Nhập số thủ công (ô "Nhập số") -----
+    private int? _previewNumber;
+    private readonly List<int> _manualQueue = new();
+    private bool _starting;
+
+    private void OnQuickPreview(int? n)
+    {
+        _previewNumber = n;
+        StateHasChanged();
+    }
+
+    /// <summary>Nhận số gõ tay. Trả về null nếu OK, hoặc thông báo lỗi (khi đó không số nào được nhận).</summary>
+    private async Task<string?> DrawManual(IReadOnlyList<int> numbers)
+    {
+        var accepted = new List<int>();
+        var problems = new List<string>();
+        foreach (var n in numbers.Distinct())
+        {
+            if (n < 1 || n > TotalNumbers) problems.Add($"{n:00} ngoài khoảng 1–{TotalNumbers}");
+            else if (DrawnNumbers.Contains(n) || CurrentSelectedNumbers.Contains(n)
+                     || _manualQueue.Contains(n) || FlyingBallData?.Number == n)
+                problems.Add($"{n:00} đã quay rồi");
+            else accepted.Add(n);
+        }
+        if (problems.Count > 0) return string.Join("; ", problems);
+
+        _manualQueue.AddRange(accepted);
+        await StartNextManualAsync();
+        return null;
+    }
+
+    // Lấy số tiếp theo trong hàng đợi và cho bóng bay (mỗi lần 1 bóng)
+    private async Task StartNextManualAsync()
+    {
+        if (_starting || FlyingBallData != null || _manualQueue.Count == 0) return;
+        _starting = true;
+        try
+        {
+            var n = _manualQueue[0];
+            _manualQueue.RemoveAt(0);
+            var pos = await JSRuntime.InvokeAsync<PositionData?>("AnimationHelper.getClickPosition", $"ball-{n}");
+            if (FlyingBallData != null)
+            {
+                _manualQueue.Insert(0, n); // có bóng khác vừa bay lên: chờ lượt sau
+                return;
+            }
+            HandleNumberSelection(Tuple.Create(n, pos?.top ?? 0f, pos?.left ?? 0f));
+        }
+        finally { _starting = false; }
+    }
 
     // Người chơi bấm vào 1 số ở bảng 75 số
     private void HandleNumberSelection(Tuple<int, float, float> data)
@@ -146,7 +201,7 @@
         if (FlyingBallData != null) return;
 
         var available = Enumerable.Range(1, TotalNumbers)
-            .Where(n => !CurrentSelectedNumbers.Contains(n) && !DrawnNumbers.Contains(n))
+            .Where(n => !CurrentSelectedNumbers.Contains(n) && !DrawnNumbers.Contains(n) && !_manualQueue.Contains(n))
             .ToList();
 
         if (available.Count == 0)
@@ -171,6 +226,7 @@
 
         FlyingBallData = null;
         StateHasChanged();
+        _ = StartNextManualAsync(); // còn số gõ sẵn trong hàng đợi thì bay tiếp
     }
 
     // Sau khi trao giải + chụp ảnh xong
@@ -201,6 +257,8 @@
         CurrentSelectedNumbers.Clear();
         DrawnNumbers.Clear();
         HistoryImages.Clear();
+        _manualQueue.Clear();
+        _previewNumber = null;
         historyPanel?.ResetState();
         StateHasChanged();
     }

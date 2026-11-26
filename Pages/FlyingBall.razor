@@ -37,6 +37,10 @@
                 await Task.Delay(800);
             }
         }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"FlyingBall: {ex.Message}"); // lỗi JS không được làm sập giao diện
+        }
         finally
         {
             // Dù có lỗi hay không vẫn phải báo hoàn thành, để số được thêm vào bảng
