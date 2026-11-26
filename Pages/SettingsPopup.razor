@@ -106,6 +106,20 @@
                     }
                 </div>
 
+                @* ---- Danh sách thẻ trên màn hình quay số ---- *@
+                <div class="d-flex flex-wrap align-items-center gap-3 mb-2">
+                    <div class="form-check mb-0">
+                        <input class="form-check-input" type="checkbox" id="settings-show-card-list" @bind="_draft.ShowCardList" />
+                        <label class="form-check-label" for="settings-show-card-list">Hiện danh sách thẻ Đã Bingo / Chờ 1 / Chờ 2</label>
+                    </div>
+                    <div class="d-flex align-items-center gap-2 flex-grow-1" style="min-width:220px">
+                        <span class="small text-nowrap">Độ đậm nền: <strong>@((int)Math.Round(_draft.CardListOpacity * 100))%</strong></span>
+                        <input type="range" class="form-range" min="0.1" max="1" step="0.05" disabled="@(!_draft.ShowCardList)"
+                               @bind="_draft.CardListOpacity" @bind:event="oninput" />
+                    </div>
+                </div>
+                <div class="form-text mb-2">Danh sách nằm mờ ở góc phải khu quay số; rê chuột vào là hiện rõ, bấm tiêu đề để thu gọn.</div>
+
                 @* ---- Xem trước ---- *@
                 @if (_draft.CardsIssued > 0)
                 {

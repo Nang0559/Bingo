@@ -34,6 +34,12 @@ namespace Bingo
         /// <summary>Số thẻ phát cho mỗi người.</summary>
         public int CardsPerPerson { get; set; } = 1;
 
+        /// <summary>Hiện danh sách thẻ theo trạng thái (đã Bingo / chờ 1 số / chờ 2 số) trên màn hình quay số.</summary>
+        public bool ShowCardList { get; set; } = true;
+
+        /// <summary>Độ đậm của danh sách thẻ khi ở chế độ nền (0.1 = rất mờ, 1 = rõ nhất). Rê chuột vào là rõ hẳn.</summary>
+        public double CardListOpacity { get; set; } = 0.5;
+
         /// <summary>Tổng số thẻ phát hành = người tham gia x thẻ mỗi người.</summary>
         [JsonIgnore]
         public int CardsIssued => Math.Max(0, Participants) * Math.Max(1, CardsPerPerson);

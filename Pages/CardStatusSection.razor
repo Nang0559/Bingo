@@ -1,0 +1,30 @@
+@* Một nhóm thẻ trong danh sách trạng thái (Đã Bingo / Chờ 1 số / Chờ 2 số). *@
+<div class="cl-section @CssClass">
+    <div class="cl-title">@Title <span class="cl-count">@Items.Count</span></div>
+    @if (Items.Count == 0)
+    {
+        <div class="cl-empty">— chưa có —</div>
+    }
+    else
+    {
+        <div class="cl-chips">
+            @foreach (var it in Items.Take(Limit))
+            {
+                <span class="cl-chip" title="@($"{it.Code} · {it.Who} · {it.Detail}")">@it.Code@(string.IsNullOrEmpty(it.Short) ? "" : $" · {it.Short}")</span>
+            }
+            @if (Items.Count > Limit)
+            {
+                <span class="cl-more">+@(Items.Count - Limit) thẻ nữa</span>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string CssClass { get; set; } = "";
+    [Parameter] public List<CardService.CardStatusItem> Items { get; set; } = new();
+
+    /// <summary>Số thẻ hiện tối đa mỗi nhóm (tránh vẽ hàng nghìn thẻ).</summary>
+    [Parameter] public int Limit { get; set; } = 60;
+}

@@ -36,6 +36,25 @@
                     </div>
                 </div>
             }
+
+            @if (Cards.HasCards && Settings.Current.ShowCardList)
+            {
+                var lists = Cards.GetStatusLists(CurrentSelectedNumbers.Concat(DrawnNumbers));
+                <div class="card-list-panel @(_listCollapsed ? "collapsed" : "")"
+                     style="--cl-opacity:@Settings.Current.CardListOpacity.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)">
+                    <div class="cl-head" @onclick="() => _listCollapsed = !_listCollapsed" title="Bấm để thu gọn / mở rộng. Rê chuột vào để xem rõ.">
+                        📋 Danh sách thẻ <span class="cl-toggle">@(_listCollapsed ? "▸" : "▾")</span>
+                    </div>
+                    @if (!_listCollapsed)
+                    {
+                        <div class="cl-body">
+                            <CardStatusSection Title="✅ Đã Bingo" CssClass="cl-win" Items="lists.Winning" />
+                            <CardStatusSection Title="⏳ Chờ 1 số" CssClass="cl-m1" Items="lists.Missing1" />
+                            <CardStatusSection Title="⌛ Chờ 2 số" CssClass="cl-m2" Items="lists.Missing2" />
+                        </div>
+                    }
+                </div>
+            }
         </div>
 
         @if (FlyingBallData != null)
@@ -93,6 +112,7 @@
     private int TotalNumbers => Settings.Current.TotalNumbers;
     private bool GameStarted => CurrentSelectedNumbers.Count > 0 || DrawnNumbers.Count > 0;
     private bool showSettings;
+    private bool _listCollapsed;
 
     // Thống kê thẻ dựa trên TẤT CẢ số đã quay (đang chọn + đã chốt)
     private CardStats Stats => Cards.GetStats(CurrentSelectedNumbers.Concat(DrawnNumbers));

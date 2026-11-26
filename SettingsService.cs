@@ -85,6 +85,7 @@ namespace Bingo
             s.BallColor = AppSettings.NormalizeColor(s.BallColor);
             s.Participants = Math.Clamp(s.Participants, 0, CardService.MaxParticipants);
             s.CardsPerPerson = Math.Clamp(s.CardsPerPerson, 1, 10);
+            s.CardListOpacity = Math.Clamp(s.CardListOpacity, 0.1, 1);
 
             s.Rewards ??= new List<RewardSetting>();
             if (s.Rewards.Count == 0)

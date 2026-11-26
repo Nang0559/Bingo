@@ -85,6 +85,12 @@ namespace Bingo
         /// <summary>Một đường thắng (hàng/cột/chéo) và các số (không tính FREE) trên đường đó.</summary>
         public record WinLine(string Name, int[] Numbers);
 
+        /// <summary>Một thẻ trong danh sách trạng thái. Short = gợi ý ngắn hiện cạnh mã thẻ (số còn cần), Detail = mô tả đầy đủ.</summary>
+        public record CardStatusItem(int Index, string Code, string Who, string Short, string Detail);
+
+        /// <summary>Danh sách thẻ theo 3 trạng thái: đã Bingo / chờ 1 số / chờ 2 số (thẻ đã trao thưởng không có trong danh sách).</summary>
+        public record CardStatusLists(List<CardStatusItem> Winning, List<CardStatusItem> Missing1, List<CardStatusItem> Missing2);
+
         /// <summary>Một thẻ để hiển thị (xem trước / tra cứu). Numbers = 25 ô theo hàng, 0 = FREE.</summary>
         public record CardView(int Index, string Code, string Who, int[] Numbers);
 
@@ -543,6 +549,57 @@ namespace Bingo
                 else if (best == 2) m2++;
             }
             return new CardStats(_set.Cards.Count, awarded, win, m1, m2);
+        }
+
+        /// <summary>
+        /// Liệt kê thẻ ở từng trạng thái (cùng cách phân loại với <see cref="GetStats"/>):
+        /// đã Bingo (kèm hàng/cột/chéo đã đủ), chờ 1 số (kèm số còn cần), chờ 2 số (kèm cặp số còn cần).
+        /// </summary>
+        public CardStatusLists GetStatusLists(IEnumerable<int> drawn)
+        {
+            var lists = new CardStatusLists(new(), new(), new());
+            if (_set == null) return lists;
+
+            var marks = ToMarks(drawn);
+            for (int i = 0; i < _set.Cards.Count; i++)
+            {
+                if (_awarded.Count > 0 && _awarded.Contains(CardKey(i))) continue;
+
+                var card = _set.Cards[i];
+                int best = Size;
+                var bestMissing = new List<int[]>();     // số còn thiếu của các đường tốt nhất
+                var bestNames = new List<string>();
+                for (int l = 0; l < Lines.Length; l++)
+                {
+                    var miss = Lines[l].Where(c => c != FreeCell && !marks[card[c]]).Select(c => card[c]).OrderBy(n => n).ToArray();
+                    if (miss.Length > best) continue;
+                    if (miss.Length < best) { best = miss.Length; bestMissing.Clear(); bestNames.Clear(); }
+                    bestMissing.Add(miss);
+                    bestNames.Add(LineNames[l]);
+                }
+                if (best > 2) continue;
+
+                string code = CodeOf(i), who = WhoOf(i);
+                static string N(int n) => n.ToString("00");
+                if (best == 0)
+                {
+                    string names = string.Join(" + ", bestNames);
+                    lists.Winning.Add(new CardStatusItem(i, code, who, "", $"{names} đã đủ"));
+                }
+                else if (best == 1)
+                {
+                    var need = bestMissing.Select(m => m[0]).Distinct().OrderBy(n => n).ToList();
+                    lists.Missing1.Add(new CardStatusItem(i, code, who, string.Join("/", need.Select(N)),
+                        $"Cần số: {string.Join(" hoặc ", need.Select(N))}"));
+                }
+                else
+                {
+                    var pairs = bestMissing.Select(m => string.Join("+", m.Select(N))).Distinct().ToList();
+                    lists.Missing2.Add(new CardStatusItem(i, code, who, pairs[0] + (pairs.Count > 1 ? "…" : ""),
+                        $"Cần 2 số: {string.Join(" hoặc ", pairs)}"));
+                }
+            }
+            return lists;
         }
 
         // ---------- Sao lưu / khôi phục bộ thẻ ----------
