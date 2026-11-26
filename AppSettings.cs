@@ -27,15 +27,12 @@ namespace Bingo
         /// <summary>Màu bóng dạng #rrggbb (áp dụng cho bảng số, bóng bay, bóng đã quay và thẻ in).</summary>
         public string BallColor { get; set; } = DefaultBallColor;
 
-        // ----- Thẻ Bingo -----
+        // ----- Thẻ Bingo 5x5 (trúng khi đủ 1 hàng / cột / đường chéo; ô giữa FREE) -----
         /// <summary>Số người tham gia. 0 = không phát hành thẻ.</summary>
         public int Participants { get; set; } = 0;
 
         /// <summary>Số thẻ phát cho mỗi người.</summary>
         public int CardsPerPerson { get; set; } = 1;
-
-        /// <summary>Số bóng trên mỗi thẻ (thẻ trúng khi cả dãy số này đều đã quay).</summary>
-        public int NumbersPerCard { get; set; } = 5;
 
         /// <summary>Tổng số thẻ phát hành = người tham gia x thẻ mỗi người.</summary>
         [JsonIgnore]

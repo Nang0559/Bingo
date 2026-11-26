@@ -49,12 +49,19 @@
         {
             <span class="text-danger">Hãy chọn một giải ở trên trước.</span>
         }
-        · Cần @WinCountText, cách nhau bằng ',' hoặc khoảng trắng@(Cards.HasCards ? ", hoặc gõ mã thẻ (vd #42)" : "")
+        @if (Cards.HasCards)
+        {
+            <span>· Gõ <strong>mã thẻ</strong> (vd #42) hoặc <strong>4–5 số</strong> của hàng / cột / đường chéo vừa đủ</span>
+        }
+        else
+        {
+            <span>· Cần @WinCountText, cách nhau bằng ',' hoặc khoảng trắng</span>
+        }
     </div>
 
     <div class="input-group mb-3">
         <input type="text" @bind="InputNumbers" class="form-control"
-               placeholder="@(Cards.HasCards ? "01, 05, 12, 20... hoặc #42" : "Ví dụ: 01, 05, 12, 20...")"
+               placeholder="@(Cards.HasCards ? "#42  hoặc  06, 14, 13, 11 ..." : "Ví dụ: 01, 05, 12, 20...")"
                @onkeyup="@EnterKeyHandler" />
 
         <button class="btn btn-primary" @onclick="CheckAndAddWinner"
@@ -316,15 +323,13 @@
             .Split(new[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .ToList();
 
-        // Gõ mã thẻ (vd "#42") → lấy dãy số của đúng thẻ đã phát hành đó
-        if (inputNumberStrings.Count == 1 && inputNumberStrings[0].StartsWith('#'))
+        // Có bộ thẻ Bingo 5x5 đã phát hành: kiểm tra theo thẻ (hàng / cột / đường chéo)
+        if (Cards.HasCards)
         {
-            if (!int.TryParse(inputNumberStrings[0].AsSpan(1), out int code) || !Cards.TryGetByCode(code, out var byCode) || byCode == null)
-            {
-                JSRuntime.InvokeVoidAsync("showCustomError", "Không có thẻ với mã này trong bộ thẻ đã phát hành."); return;
-            }
-            inputNumberStrings = byCode.Numbers.Select(n => n.ToString()).ToList();
+            AddCardWinner(inputNumberStrings);
+            return;
         }
+
         foreach (var s in inputNumberStrings) { if (int.TryParse(s, out int n)) parsedValidNumbers.Add(n); }
 
         bool hasRequiredCount = parsedValidNumbers.Count >= Settings.Current.MinWinCount && parsedValidNumbers.Count <= Settings.Current.MaxWinCount;
@@ -348,16 +353,7 @@
 
         string winningKey = string.Join("-", parsedValidNumbers.OrderBy(n => n));
 
-        // Có bộ thẻ phát hành: dãy số phải đúng là MỘT THẺ ĐÃ PHÁT HÀNH
         string cardLabel = "";
-        if (Cards.HasCards)
-        {
-            if (!Cards.TryFind(winningKey, out var issuedCard) || issuedCard == null)
-            {
-                JSRuntime.InvokeVoidAsync("showCustomError", "Dãy số này không thuộc bộ thẻ đã phát hành."); return;
-            }
-            cardLabel = $"{issuedCard.Code} · {issuedCard.Who}";
-        }
         if (UsedWinningCombinations.Contains(winningKey))
         {
             JSRuntime.InvokeVoidAsync("showCustomError", "Bộ số này ĐÃ ĐƯỢC trao thưởng trước đó."); return;
@@ -371,6 +367,97 @@
         string display = string.Join(", ", parsedValidNumbers.OrderBy(n => n).Select(n => n.ToString("D2")));
         _tempSessionWinnersDisplay.Add(display);
         _tempSessionWinnerLabels.Add(cardLabel);
+        InputNumbers = "";
+        StateHasChanged();
+    }
+
+    // --- Kiểm tra trúng thưởng theo thẻ Bingo 5x5 ---
+    // Thẻ trúng khi đủ 1 hàng, 1 cột hoặc 1 đường chéo (ô FREE tính là đã có).
+    // Người chơi đọc mã thẻ (#42) hoặc 4–5 số của đường vừa đủ; cùng quy tắc "số đã quay" như trước (CurrentSelectedNumbers).
+    private void AddCardWinner(List<string> tokens)
+    {
+        CardService.CardView? card = null;
+        CardService.WinLine? line = null;
+        List<CardService.WinLine> lines;
+
+        if (tokens.Count == 1 && tokens[0].StartsWith('#'))
+        {
+            if (!int.TryParse(tokens[0].AsSpan(1), out int code) || !Cards.TryGetByCode(code, out card) || card == null)
+            {
+                JSRuntime.InvokeVoidAsync("showCustomError", "Không có thẻ với mã này trong bộ thẻ đã phát hành."); return;
+            }
+            lines = Cards.GetWinningLines(card.Index, CurrentSelectedNumbers);
+            if (lines.Count == 0)
+            {
+                var (missing, nums) = Cards.BestLine(card.Index, CurrentSelectedNumbers);
+                JSRuntime.InvokeVoidAsync("showCustomError",
+                    $"Thẻ {card.Code} chưa trúng: chưa đủ hàng, cột hay đường chéo nào.\nĐường gần nhất còn thiếu {missing} số: {string.Join(", ", nums.Select(n => n.ToString("D2")))}.");
+                return;
+            }
+            line = lines[0];
+        }
+        else
+        {
+            var numbers = new List<int>();
+            foreach (var t in tokens)
+            {
+                if (!int.TryParse(t, out int n)) { JSRuntime.InvokeVoidAsync("showCustomError", $"\"{t}\" không phải là số."); return; }
+                numbers.Add(n);
+            }
+            if (numbers.Count != numbers.Distinct().Count())
+            {
+                JSRuntime.InvokeVoidAsync("showCustomError", "Các số trong dãy phải khác nhau."); return;
+            }
+            // Hàng/cột/chéo qua ô FREE chỉ có 4 số, các đường còn lại có 5 số
+            if (numbers.Count < 4 || numbers.Count > 5)
+            {
+                JSRuntime.InvokeVoidAsync("showCustomError", "Một hàng / cột / đường chéo có 4 số (qua ô FREE) hoặc 5 số. Hoặc gõ mã thẻ, vd #42."); return;
+            }
+            var notDrawn = numbers.Where(n => !CurrentSelectedNumbers.Contains(n)).OrderBy(n => n).ToList();
+            if (notDrawn.Count > 0)
+            {
+                JSRuntime.InvokeVoidAsync("showCustomError", $"Chưa trúng: số chưa quay: {string.Join(", ", notDrawn.Select(n => n.ToString("D2")))}."); return;
+            }
+
+            var matches = Cards.FindByLine(numbers, CurrentSelectedNumbers);
+            if (matches.Count == 0)
+            {
+                JSRuntime.InvokeVoidAsync("showCustomError", "Dãy số này không phải một hàng / cột / đường chéo nào của thẻ đã phát hành."); return;
+            }
+            var open = matches.Where(m => !Cards.IsAwarded(m.Card.Index)).ToList();
+            if (open.Count == 0)
+            {
+                JSRuntime.InvokeVoidAsync("showCustomError", $"Thẻ {matches[0].Card.Code} ĐÃ ĐƯỢC trao thưởng trước đó."); return;
+            }
+            if (open.Count > 1)
+            {
+                var codes = string.Join(", ", open.Take(6).Select(m => m.Card.Code));
+                JSRuntime.InvokeVoidAsync("showCustomError",
+                    $"Có {open.Count} thẻ cùng có dãy số này ({codes}{(open.Count > 6 ? ", ..." : "")}). Hãy nhập MÃ THẺ của người trúng (vd {open[0].Card.Code})."); return;
+            }
+            card = open[0].Card;
+            line = open[0].Line;
+            lines = Cards.GetWinningLines(card.Index, CurrentSelectedNumbers);
+        }
+
+        if (Cards.IsAwarded(card.Index))
+        {
+            JSRuntime.InvokeVoidAsync("showCustomError", $"Thẻ {card.Code} ĐÃ ĐƯỢC trao thưởng trước đó."); return;
+        }
+
+        string key = CardService.CardKey(card.Index);
+        if (UsedWinningCombinations.Contains(key))
+        {
+            JSRuntime.InvokeVoidAsync("showCustomError", $"Thẻ {card.Code} ĐÃ ĐƯỢC trao thưởng trước đó."); return;
+        }
+        if (_tempSessionWinners.Contains(key))
+        {
+            JSRuntime.InvokeVoidAsync("showCustomError", $"Thẻ {card.Code} đã có trong danh sách chờ."); return;
+        }
+
+        _tempSessionWinners.Add(key);
+        _tempSessionWinnersDisplay.Add(string.Join(", ", line!.Numbers.OrderBy(n => n).Select(n => n.ToString("D2"))));
+        _tempSessionWinnerLabels.Add($"{card.Code} · {card.Who} · {string.Join(" + ", lines.Select(l => l.Name))}");
         InputNumbers = "";
         StateHasChanged();
     }

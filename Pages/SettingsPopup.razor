@@ -68,38 +68,42 @@
                 </div>
 
                 @* ============ THẺ BINGO ============ *@
-                <h5 class="settings-section">Thẻ Bingo (in 8 thẻ / tờ A4)</h5>
+                <h5 class="settings-section">Thẻ Bingo 5×5 (in 8 thẻ / tờ A4)</h5>
 
                 @if (CardsLocked)
                 {
                     <div class="alert alert-warning py-2 mb-2">
                         🔒 <strong>Bộ thẻ đã phát hành</strong>@(Cards.IssuedAt != null ? $" ({Cards.IssuedAt})" : "")
                         — @Cards.Count thẻ. Các thẻ đã in được giữ nguyên: bạn chỉ có thể <strong>tăng số người</strong>
-                        (thẻ mới nối thêm phía sau). Muốn đổi số thẻ / số bóng, hãy bấm "Tạo bộ thẻ mới".
+                        (thẻ mới nối thêm phía sau). Muốn đổi số thẻ / người hoặc tổng số bóng, hãy bấm "Tạo bộ thẻ mới".
                     </div>
                 }
 
                 <div class="row g-2 mb-2">
-                    <div class="col-6 col-md-4">
+                    <div class="col-6">
                         <label class="form-label">Số người tham gia</label>
                         <input type="number" class="form-control" min="@(CardsLocked ? Cards.Count / Math.Max(1, Cards.SetPerPerson) : 0)" max="@CardService.MaxParticipants"
                                @bind="_draft.Participants" @bind:event="oninput" />
                     </div>
-                    <div class="col-6 col-md-4">
+                    <div class="col-6">
                         <label class="form-label">Thẻ / người</label>
                         <input type="number" class="form-control" min="1" max="10" disabled="@CardsLocked"
                                @bind="_draft.CardsPerPerson" @bind:event="oninput" />
-                    </div>
-                    <div class="col-6 col-md-4">
-                        <label class="form-label">Số bóng / thẻ</label>
-                        <input type="number" class="form-control" min="1" max="15" disabled="@CardsLocked"
-                               @bind="_draft.NumbersPerCard" @bind:event="oninput" />
                     </div>
                 </div>
                 <div class="form-text mb-2">
                     Tổng thẻ phát hành: <strong>@_draft.CardsIssued</strong>
                     · Số tờ A4: <strong>@((_draft.CardsIssued + CardService.CardsPerSheet - 1) / CardService.CardsPerSheet)</strong>.
-                    Thẻ trúng khi <strong>tất cả</strong> số trên thẻ đã được quay. Đặt số người = 0 để không dùng thẻ.
+                    Mỗi thẻ là bảng <strong>5×5</strong> (cột B-I-N-G-O, ô giữa <strong>FREE</strong>); thẻ trúng khi đủ
+                    <strong>1 hàng, 1 cột hoặc 1 đường chéo</strong>. Đặt số người = 0 để không dùng thẻ.
+                    @if (_draft.TotalNumbers >= CardService.MinTotalForCards)
+                    {
+                        <div>Dải số theo cột: @CardService.RangeText(_draft.TotalNumbers)</div>
+                    }
+                    else if (_draft.CardsIssued > 0)
+                    {
+                        <div class="text-danger">Cần tổng số bóng từ @CardService.MinTotalForCards trở lên để phát hành thẻ 5×5.</div>
+                    }
                 </div>
 
                 @* ---- Xem trước ---- *@
@@ -117,13 +121,24 @@
                     <div class="pv-grid">
                         @foreach (var c in preview)
                         {
-                            <div class="pv-card">
+                            <div class="pv-card" style="@AppSettings.BuildBallVars(_draft.BallColor)">
                                 <div class="pv-head"><span class="pv-title">@_draft.Title</span><span class="pv-code">@c.Code</span></div>
                                 <div class="pv-who">@c.Who</div>
-                                <div class="pv-nums" style="@AppSettings.BuildBallVars(_draft.BallColor)">
-                                    @foreach (var n in c.Numbers)
+                                <div class="pv-board">
+                                    @foreach (var ch in CardService.Letters)
                                     {
-                                        <span class="pv-ball">@n.ToString("00")</span>
+                                        <div class="pv-l">@ch</div>
+                                    }
+                                    @for (int cell = 0; cell < c.Numbers.Length; cell++)
+                                    {
+                                        if (cell == CardService.FreeCell)
+                                        {
+                                            <div class="pv-f">FREE</div>
+                                        }
+                                        else
+                                        {
+                                            <div class="pv-n">@c.Numbers[cell].ToString("00")</div>
+                                        }
                                     }
                                 </div>
                             </div>
@@ -279,7 +294,6 @@
     /// <summary>Thiết lập thẻ đang chỉnh đã khớp với bộ thẻ đã lưu (mới được in).</summary>
     private bool CardsSaved => _draft != null && Cards.HasCards
         && _draft.TotalNumbers == Cards.SetTotal
-        && _draft.NumbersPerCard == Cards.SetNumbersPerCard
         && _draft.CardsIssued == Cards.Count;
 
     protected override void OnInitialized() => Cards.OnChange += HandleCardsChanged;
@@ -385,17 +399,13 @@
         if (s.CardsPerPerson < 1 || s.CardsPerPerson > 10) return "Số thẻ mỗi người phải từ 1 đến 10.";
         if (s.CardsIssued > 0)
         {
-            if (s.NumbersPerCard < s.MinWinCount || s.NumbersPerCard > s.MaxWinCount)
-                return $"Số bóng trên thẻ ({s.NumbersPerCard}) phải nằm trong khoảng số trúng ({s.MinWinCount}–{s.MaxWinCount}).";
-            if (s.NumbersPerCard > s.TotalNumbers) return "Số bóng trên thẻ không được lớn hơn tổng số bóng.";
-            var maxCards = CardService.MaxUniqueCards(s.TotalNumbers, s.NumbersPerCard);
-            if (s.CardsIssued > maxCards)
-                return $"Chỉ tạo được tối đa {maxCards:N0} thẻ khác nhau với {s.NumbersPerCard} bóng / {s.TotalNumbers} số.";
+            if (s.TotalNumbers < CardService.MinTotalForCards)
+                return $"Thẻ Bingo 5×5 cần tổng số bóng từ {CardService.MinTotalForCards} trở lên (mỗi cột B-I-N-G-O cần ít nhất 5 số).";
         }
         if (CardsLocked)
         {
-            if (s.TotalNumbers != Cards.SetTotal || s.NumbersPerCard != Cards.SetNumbersPerCard || s.CardsPerPerson != Cards.SetPerPerson)
-                return "Bộ thẻ đã phát hành: không đổi được Tổng số bóng, Số bóng / thẻ, Thẻ / người. Bấm \"Tạo bộ thẻ mới\" nếu muốn đổi.";
+            if (s.TotalNumbers != Cards.SetTotal || s.CardsPerPerson != Cards.SetPerPerson)
+                return "Bộ thẻ đã phát hành: không đổi được Tổng số bóng, Thẻ / người. Bấm \"Tạo bộ thẻ mới\" nếu muốn đổi.";
             if (s.CardsIssued < Cards.Count)
                 return $"Bộ thẻ đã phát hành ({Cards.Count} thẻ): không được giảm số người. Bấm \"Tạo bộ thẻ mới\" nếu muốn làm lại.";
         }

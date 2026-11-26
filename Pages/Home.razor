@@ -26,12 +26,12 @@
                 <div class="card-stats">
                     <div class="card-stats-title">🎟️ Thẻ phát hành: <strong>@st.Total</strong>@(st.Awarded > 0 ? $" (đã trao {st.Awarded})" : "")</div>
                     <div class="card-stats-row">
-                        <span class="cs-win" title="Đã đủ số, có thể nhận thưởng ngay">✅ Đủ số: <strong>@st.Winning</strong></span>
-                        <span class="cs-m1" title="Còn thiếu 1 số">⏳ Thiếu 1: <strong>@st.Missing1</strong></span>
-                        <span class="cs-m2" title="Còn thiếu 2 số">⌛ Thiếu 2: <strong>@st.Missing2</strong></span>
+                        <span class="cs-win" title="Đã đủ 1 hàng / cột / đường chéo → có thể hô BINGO và nhận thưởng ngay">✅ Đã Bingo: <strong>@st.Winning</strong></span>
+                        <span class="cs-m1" title="Đường gần nhất chỉ còn thiếu 1 số nữa là Bingo">⏳ Chờ 1 số: <strong>@st.Missing1</strong></span>
+                        <span class="cs-m2" title="Đường gần nhất còn thiếu 2 số">⌛ Chờ 2 số: <strong>@st.Missing2</strong></span>
                     </div>
                     <div class="card-stats-note">
-                        Có thể trúng: <strong>@st.Winning</strong> / @st.Remaining thẻ chưa trao
+                        Có thể trúng ngay: <strong>@st.Winning</strong> / @st.Remaining thẻ chưa trao
                         (@(st.Remaining > 0 ? (st.Winning * 100.0 / st.Remaining).ToString("0.##") : "0")%)
                     </div>
                 </div>
