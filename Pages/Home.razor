@@ -39,20 +39,30 @@
 
             @if (Cards.HasCards && Settings.Current.ShowCardList)
             {
-                var lists = Cards.GetStatusLists(CurrentSelectedNumbers.Concat(DrawnNumbers));
-                <div class="card-list-panel @(_listCollapsed ? "collapsed" : "")"
+                var lists = StatusLists;
+                @* Bọc ngoài chỉ mang biến CSS (display: contents) để khung bên trong không có style do Blazor quản lý:
+                   như vậy vị trí kéo thả (left/top) không bị Blazor ghi đè khi render lại. *@
+                <div class="card-list-vars"
                      style="--cl-opacity:@Settings.Current.CardListOpacity.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)">
-                    <div class="cl-head" @onclick="() => _listCollapsed = !_listCollapsed" title="Bấm để thu gọn / mở rộng. Rê chuột vào để xem rõ.">
-                        📋 Danh sách thẻ <span class="cl-toggle">@(_listCollapsed ? "▸" : "▾")</span>
-                    </div>
-                    @if (!_listCollapsed)
-                    {
-                        <div class="cl-body">
-                            <CardStatusSection Title="✅ Đã Bingo" CssClass="cl-win" Items="lists.Winning" />
-                            <CardStatusSection Title="⏳ Chờ 1 số" CssClass="cl-m1" Items="lists.Missing1" />
-                            <CardStatusSection Title="⌛ Chờ 2 số" CssClass="cl-m2" Items="lists.Missing2" />
+                    <div id="card-list-panel" class="card-list-panel @(_listCollapsed ? "collapsed" : "")">
+                        <div class="cl-head" data-drag-handle @onclick="() => _listCollapsed = !_listCollapsed"
+                             title="Kéo để di chuyển · bấm để thu gọn / mở rộng · bấm đúp để về góc phải dưới · rê chuột vào để xem rõ">
+                            <span>📋 Danh sách thẻ</span>
+                            <span class="cl-tools">
+                                <button type="button" class="cl-reset" title="Đưa về góc phải phía dưới"
+                                        @onclick="ResetListPosition" @onclick:stopPropagation="true">⤓</button>
+                                <span class="cl-toggle">@(_listCollapsed ? "▸" : "▾")</span>
+                            </span>
                         </div>
-                    }
+                        @if (!_listCollapsed)
+                        {
+                            <div class="cl-body">
+                                <CardStatusSection Title="✅ Đã Bingo" CssClass="cl-win" Items="lists.Winning" />
+                                <CardStatusSection Title="⏳ Chờ 1 số" CssClass="cl-m1" Items="lists.Missing1" />
+                                <CardStatusSection Title="⌛ Chờ 2 số" CssClass="cl-m2" Items="lists.Missing2" />
+                            </div>
+                        }
+                    </div>
                 </div>
             }
         </div>
@@ -114,8 +124,48 @@
     private bool showSettings;
     private bool _listCollapsed;
 
+    // ----- Bộ nhớ đệm thống kê / danh sách thẻ -----
+    // Home render lại rất thường xuyên (vd. mỗi phím gõ ở ô "Nhập số"), trong khi việc tính trạng thái
+    // phải duyệt toàn bộ thẻ. Chỉ tính lại khi số đã quay hoặc bộ thẻ / giải thưởng thật sự thay đổi.
+    private int _cardsVersion;
+    private (int, int, int, int) _statsKey = (-1, -1, -1, -1);
+    private (int, int, int, int) _listsKey = (-1, -1, -1, -1);
+    private CardStats _statsCache;
+    private CardService.CardStatusLists? _listsCache;
+
+    private (int, int, int, int) CardKey() =>
+        (_cardsVersion, CurrentSelectedNumbers.Count, DrawnNumbers.Count,
+         CurrentSelectedNumbers.Count > 0 ? CurrentSelectedNumbers[^1] : 0);
+
     // Thống kê thẻ dựa trên TẤT CẢ số đã quay (đang chọn + đã chốt)
-    private CardStats Stats => Cards.GetStats(CurrentSelectedNumbers.Concat(DrawnNumbers));
+    private CardStats Stats
+    {
+        get
+        {
+            var key = CardKey();
+            if (_statsKey != key)
+            {
+                _statsCache = Cards.GetStats(CurrentSelectedNumbers.Concat(DrawnNumbers));
+                _statsKey = key;
+            }
+            return _statsCache;
+        }
+    }
+
+    // Danh sách thẻ theo 3 trạng thái (đã Bingo / chờ 1 số / chờ 2 số)
+    private CardService.CardStatusLists StatusLists
+    {
+        get
+        {
+            var key = CardKey();
+            if (_listsCache == null || _listsKey != key)
+            {
+                _listsCache = Cards.GetStatusLists(CurrentSelectedNumbers.Concat(DrawnNumbers));
+                _listsKey = key;
+            }
+            return _listsCache;
+        }
+    }
 
     protected override void OnInitialized()
     {
@@ -123,7 +173,33 @@
         Cards.OnChange += HandleSettingsChanged;
     }
 
-    private void HandleSettingsChanged() => InvokeAsync(StateHasChanged);
+    private void HandleSettingsChanged()
+    {
+        _cardsVersion++; // bộ thẻ / thiết lập / thẻ đã trao thưởng đổi: bỏ bộ nhớ đệm
+        InvokeAsync(StateHasChanged);
+    }
+
+    // Sau mỗi lần render: bật kéo thả cho khung "Danh sách thẻ" (gọi lại nhiều lần vẫn an toàn)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Cards.HasCards && Settings.Current.ShowCardList)
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("PanelDrag.ensure", "card-list-panel", ".spinning-area", "bingo.cardlist.pos.v1");
+            }
+            catch (JSException)
+            {
+                // Chưa nạp được panelDrag.js (cache cũ): khung vẫn hiện ở góc phải dưới, chỉ là chưa kéo được
+            }
+        }
+    }
+
+    private async Task ResetListPosition()
+    {
+        try { await JSRuntime.InvokeVoidAsync("PanelDrag.reset", "card-list-panel"); }
+        catch (JSException) { }
+    }
 
     public void Dispose()
     {
@@ -279,6 +355,7 @@
         HistoryImages.Clear();
         _manualQueue.Clear();
         _previewNumber = null;
+        _cardsVersion++;
         historyPanel?.ResetState();
         StateHasChanged();
     }
